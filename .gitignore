@@ -1,0 +1,47 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+
+## Environment files
+.env
+.env.local
+.env.*.local
+appsettings.Development.json
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+## User-specific files
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+## NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+
+## EF Core migrations (keep these)
+# Migrations/
+
