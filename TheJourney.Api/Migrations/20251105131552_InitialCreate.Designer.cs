@@ -25,7 +25,7 @@ namespace TheJourney.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("TheJourney.Api.Modules.Auth.Models.Admin", b =>
+            modelBuilder.Entity("TheJourney.Api.Modules.Admin.Auth.Models.Admin", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()

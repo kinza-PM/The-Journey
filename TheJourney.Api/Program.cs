@@ -6,8 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TheJourney.Api.Infrastructure.Database;
-using TheJourney.Api.Modules.Auth.Models;
-using TheJourney.Api.Modules.Auth.Services;
+using TheJourney.Api.Modules.Admin.Auth.Models;
+using TheJourney.Api.Modules.Admin.Auth.Services;
+using TheJourney.Api.Modules.Mobile.Auth.Notifications;
+using TheJourney.Api.Modules.Mobile.Auth.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,6 +97,8 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailSender, MailtrapSmtpEmailSender>();
+builder.Services.AddScoped<IMobileAuthService, MobileAuthService>();
 builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();

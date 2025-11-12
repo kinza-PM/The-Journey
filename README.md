@@ -29,6 +29,16 @@ SEED_ADMIN_EMAIL
 SEED_ADMIN_PASSWORD
 LOCKOUT_MAX_ATTEMPTS (default 5)
 LOCKOUT_MINUTES      (default 15)
+OTP_EXPIRY_MINUTES   (default 10)
+MAILTRAP_SMTP_HOST
+MAILTRAP_SMTP_PORT
+MAILTRAP_SMTP_USERNAME
+MAILTRAP_SMTP_PASSWORD
+MAILTRAP_FROM_EMAIL
+STUDENT_JWT_EXPIRY_MINUTES (default 60)
+STUDENT_LOCKOUT_MAX_ATTEMPTS (default 5)
+STUDENT_LOCKOUT_MINUTES (default 15)
+PASSWORD_RESET_EXPIRY_MINUTES (default 30)
 ```
 
 ## Setup
@@ -37,6 +47,8 @@ cd TheJourney.Api
 dotnet restore
 dotnet ef database update   # applies migrations + seeds SuperAdmin if env vars are present
 ```
+
+If you are using Mailtrap's sandbox SMTP credentials, configure auto-forwarding in the Mailtrap UI so OTP and reset emails reach your test inboxes.
 
 ## Run
 ```powershell
@@ -55,6 +67,9 @@ Swagger UI: `https://localhost:7145/swagger`
 - `GET /api/auth/protected` – any authenticated admin with a role
 - `GET /api/auth/admin-access` – Admin or SuperAdmin
 - `GET /api/auth/superadmin-only` – SuperAdmin only
+- `POST /api/mobile/auth/signup` – student signup via email or phone (returns OTP in response during development)
+- `POST /api/mobile/auth/verify` – confirm OTP for email/phone
+- `POST /api/mobile/auth/resend-otp` – request another OTP when expired
 
 Successful and failed attempts are stored in `LoginAttempts`. Accounts lock after `LOCKOUT_MAX_ATTEMPTS` failures and unlock automatically after `LOCKOUT_MINUTES`.
 
