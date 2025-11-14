@@ -67,9 +67,12 @@ Swagger UI: `https://localhost:7145/swagger`
 - `GET /api/auth/protected` – any authenticated admin with a role
 - `GET /api/auth/admin-access` – Admin or SuperAdmin
 - `GET /api/auth/superadmin-only` – SuperAdmin only
-- `POST /api/mobile/auth/signup` – student signup via email or phone (returns OTP in response during development)
-- `POST /api/mobile/auth/verify` – confirm OTP for email/phone
+- `POST /api/mobile/auth/signup` – student signup via email (OTP via email; password requires ≥8 chars, uppercase, special character)
+- `POST /api/mobile/auth/verify` – confirm OTP for email
 - `POST /api/mobile/auth/resend-otp` – request another OTP when expired
+- `POST /api/mobile/auth/login` – JWT login with email/password
+- `POST /api/mobile/auth/forgot-password` – request password reset OTP (sent to email)
+- `POST /api/mobile/auth/reset-password` – verify OTP and set new password (requires OTP code, new password, and confirm password)
 
 Successful and failed attempts are stored in `LoginAttempts`. Accounts lock after `LOCKOUT_MAX_ATTEMPTS` failures and unlock automatically after `LOCKOUT_MINUTES`.
 

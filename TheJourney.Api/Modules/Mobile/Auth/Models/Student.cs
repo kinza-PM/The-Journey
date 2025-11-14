@@ -14,15 +14,10 @@ public class Student
     [MaxLength(255)]
     public string? Email { get; set; }
 
-    [Phone]
-    [MaxLength(20)]
-    public string? PhoneNumber { get; set; }
-
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
 
     public bool IsEmailVerified { get; set; }
-    public bool IsPhoneVerified { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
     public DateTime? VerifiedAt { get; set; }
