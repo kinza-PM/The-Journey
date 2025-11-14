@@ -24,27 +24,28 @@ public interface IMobileAuthService
     Task<PasswordResetResult> ResetPasswordAsync(PasswordResetConfirmRequest request);
 }
 
-public record SignupRequest(string? Email, string? PhoneNumber, string Password, string FullName);
+public record SignupRequest(string Email, string Password, string? FullName);
 public record SignupResult(bool Success, string Message, bool VerificationRequired, string? DebugCode = null, int? ExpiresInSeconds = null);
 
-public record VerificationRequest(string? Email, string? PhoneNumber, string Code);
+public record VerificationRequest(string Email, string Code);
 public record VerificationResult(bool Success, string Message);
 
-public record ResendRequest(string? Email, string? PhoneNumber);
+public record ResendRequest(string Email);
 public record ResendResult(bool Success, string Message, string? DebugCode = null, int? ExpiresInSeconds = null);
 
-public record LoginRequest(string? Email, string? PhoneNumber, string Password);
+public record LoginRequest(string Email, string Password);
 public record LoginResult(bool Success, string Message, string? Token = null, DateTime? ExpiresAt = null);
 
 public record PasswordResetRequest(string Email);
-public record PasswordResetRequestResult(bool Success, string Message, string? DebugToken = null, int? ExpiresInSeconds = null);
+public record PasswordResetRequestResult(bool Success, string Message, string? DebugCode = null, int? ExpiresInSeconds = null);
 
-public record PasswordResetConfirmRequest(string Email, string Token, string NewPassword);
+public record PasswordResetConfirmRequest(string Email, string OtpCode, string NewPassword, string ConfirmPassword);
 public record PasswordResetResult(bool Success, string Message);
 
 public class MobileAuthService : IMobileAuthService
 {
-    private const string Purpose = "SIGNUP";
+    private const string PurposeSignup = "SIGNUP";
+    private const string PurposePasswordReset = "PASSWORD_RESET";
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
@@ -68,24 +69,26 @@ public class MobileAuthService : IMobileAuthService
     public async Task<SignupResult> SignupAsync(SignupRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
-        var normalizedPhone = NormalizePhone(request.PhoneNumber);
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail) && string.IsNullOrWhiteSpace(normalizedPhone))
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            return new SignupResult(false, "Email or phone number is required.", false);
+            return new SignupResult(false, "A valid email address is required.", false);
         }
 
-        if (!string.IsNullOrWhiteSpace(normalizedEmail) && await _context.Students.AnyAsync(s => s.Email == normalizedEmail))
+        if (!ValidatePasswordComplexity(request.Password, out var passwordError))
+        {
+            return new SignupResult(false, passwordError, false);
+        }
+
+        if (await _context.Students.AnyAsync(s => s.Email == normalizedEmail))
         {
             return new SignupResult(false, "Email already in use.", false);
         }
 
-        if (!string.IsNullOrWhiteSpace(normalizedPhone) && await _context.Students.AnyAsync(s => s.PhoneNumber == normalizedPhone))
-        {
-            return new SignupResult(false, "Phone number already in use.", false);
-        }
-
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        var fullName = string.IsNullOrWhiteSpace(request.FullName)
+            ? normalizedEmail
+            : request.FullName.Trim();
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -93,9 +96,8 @@ public class MobileAuthService : IMobileAuthService
         {
             var student = new Student
             {
-                FullName = request.FullName.Trim(),
+                FullName = fullName,
                 Email = normalizedEmail,
-                PhoneNumber = normalizedPhone,
                 PasswordHash = passwordHash,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -104,22 +106,15 @@ public class MobileAuthService : IMobileAuthService
             _context.Students.Add(student);
             await _context.SaveChangesAsync();
 
-            var channel = !string.IsNullOrWhiteSpace(normalizedEmail) ? "EMAIL" : "PHONE";
-            var target = channel == "EMAIL" ? normalizedEmail! : normalizedPhone!;
-
-            var (code, expiresAt) = await CreateVerificationCodeAsync(student, channel, target);
-
-            if (channel == "EMAIL")
-            {
-                await SendVerificationEmailAsync(target, code, expiresAt);
-            }
+            var (code, expiresAt) = await CreateVerificationCodeAsync(student, normalizedEmail);
+            await SendVerificationEmailAsync(normalizedEmail, code, expiresAt);
 
             await transaction.CommitAsync();
 
             var debugCode = _environment.IsProduction() ? null : code;
             var expiresIn = (int)(expiresAt - DateTime.UtcNow).TotalSeconds;
 
-            return new SignupResult(true, $"Verification code generated for {channel.ToLowerInvariant()}.", true, debugCode, expiresIn);
+            return new SignupResult(true, "Verification code generated for email.", true, debugCode, expiresIn);
         }
         catch (Exception ex)
         {
@@ -133,14 +128,13 @@ public class MobileAuthService : IMobileAuthService
     public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
-        var normalizedPhone = NormalizePhone(request.PhoneNumber);
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail) && string.IsNullOrWhiteSpace(normalizedPhone))
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            return new LoginResult(false, "Email or phone number is required.");
+            return new LoginResult(false, "A valid email address is required.");
         }
 
-        var student = await FindStudentAsync(normalizedEmail, normalizedPhone);
+        var student = await FindStudentAsync(normalizedEmail);
         if (student == null)
         {
             return new LoginResult(false, "Invalid credentials.");
@@ -158,15 +152,9 @@ public class MobileAuthService : IMobileAuthService
             return new LoginResult(false, $"Account locked. Try again in {minutesRemaining} minute(s).");
         }
 
-        var channel = DetermineChannel(normalizedEmail, normalizedPhone);
-        if (channel == "EMAIL" && !student.IsEmailVerified)
+        if (!student.IsEmailVerified)
         {
             return new LoginResult(false, "Email address is not verified. Please verify before logging in.");
-        }
-
-        if (channel == "PHONE" && !student.IsPhoneVerified)
-        {
-            return new LoginResult(false, "Phone number is not verified. Please verify before logging in.");
         }
 
         var passwordValid = BCrypt.Net.BCrypt.Verify(request.Password, student.PasswordHash);
@@ -223,34 +211,27 @@ public class MobileAuthService : IMobileAuthService
             return new PasswordResetRequestResult(false, "Email address is not verified. Verify your email before resetting the password.");
         }
 
-        var expiryMinutes = int.TryParse(_configuration["PASSWORD_RESET_EXPIRY_MINUTES"], out var value) ? value : 30;
-        var rawToken = GenerateResetToken();
-        var tokenHash = BCrypt.Net.BCrypt.HashPassword(rawToken);
-
-        var entity = new StudentPasswordResetToken
-        {
-            StudentId = student.Id,
-            TokenHash = tokenHash,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.StudentPasswordResetTokens.Add(entity);
-        await _context.SaveChangesAsync();
+        await using var transaction = await _context.Database.BeginTransactionAsync();
 
         try
         {
-            await SendPasswordResetEmailAsync(student.Email!, rawToken, expiryMinutes);
+            await ExpireExistingPasswordResetCodesAsync(student.Id);
+            var (code, expiresAt) = await CreatePasswordResetCodeAsync(student, normalizedEmail);
+            await SendPasswordResetOtpEmailAsync(normalizedEmail, code, expiresAt);
+
+            await transaction.CommitAsync();
+
+            var debugCode = _environment.IsProduction() ? null : code;
+            var expiresInSeconds = (int)(expiresAt - DateTime.UtcNow).TotalSeconds;
+            return new PasswordResetRequestResult(true, "If the email is registered, a reset code has been sent.", debugCode, expiresInSeconds);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to dispatch password reset email to {Email}", student.Email);
-            return new PasswordResetRequestResult(false, "Unable to send reset instructions. Try again shortly.");
+            await transaction.RollbackAsync();
+            _context.ChangeTracker.Clear();
+            _logger.LogError(ex, "Failed to send password reset OTP to {Email}", normalizedEmail);
+            return new PasswordResetRequestResult(false, "Unable to send reset code. Try again shortly.");
         }
-
-        var debugToken = _environment.IsProduction() ? null : rawToken;
-        var expiresInSeconds = (int)(entity.ExpiresAt - DateTime.UtcNow).TotalSeconds;
-        return new PasswordResetRequestResult(true, "If the email is registered, a reset code has been sent.", debugToken, expiresInSeconds);
     }
 
     public async Task<PasswordResetResult> ResetPasswordAsync(PasswordResetConfirmRequest request)
@@ -261,20 +242,39 @@ public class MobileAuthService : IMobileAuthService
             return new PasswordResetResult(false, "A valid email address is required.");
         }
 
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return new PasswordResetResult(false, "New password and confirm password do not match.");
+        }
+
+        if (!ValidatePasswordComplexity(request.NewPassword, out var passwordError))
+        {
+            return new PasswordResetResult(false, passwordError);
+        }
+
         var student = await _context.Students.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
         if (student == null)
         {
-            return new PasswordResetResult(false, "Invalid or expired reset token.");
+            return new PasswordResetResult(false, "Invalid or expired reset code.");
         }
 
-        var tokenEntity = await _context.StudentPasswordResetTokens
-            .Where(t => t.StudentId == student.Id && t.ConsumedAt == null && t.ExpiresAt > DateTime.UtcNow)
-            .OrderByDescending(t => t.CreatedAt)
+        var codeEntity = await _context.VerificationCodes
+            .Where(c => c.StudentId == student.Id 
+                && c.Purpose == PurposePasswordReset 
+                && c.Channel == "EMAIL" 
+                && c.ConsumedAt == null 
+                && c.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(c => c.CreatedAt)
             .FirstOrDefaultAsync();
 
-        if (tokenEntity == null || !BCrypt.Net.BCrypt.Verify(request.Token, tokenEntity.TokenHash))
+        if (codeEntity == null || !BCrypt.Net.BCrypt.Verify(request.OtpCode, codeEntity.CodeHash))
         {
-            return new PasswordResetResult(false, "Invalid or expired reset token.");
+            return new PasswordResetResult(false, "Invalid or expired reset code.");
+        }
+
+        if (codeEntity.ExpiresAt < DateTime.UtcNow)
+        {
+            return new PasswordResetResult(false, "Reset code has expired. Please request a new one.");
         }
 
         student.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
@@ -283,7 +283,7 @@ public class MobileAuthService : IMobileAuthService
         student.LockUntil = null;
         student.UpdatedAt = DateTime.UtcNow;
 
-        tokenEntity.ConsumedAt = DateTime.UtcNow;
+        codeEntity.ConsumedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -293,21 +293,19 @@ public class MobileAuthService : IMobileAuthService
     public async Task<VerificationResult> VerifyAsync(VerificationRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
-        var normalizedPhone = NormalizePhone(request.PhoneNumber);
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail) && string.IsNullOrWhiteSpace(normalizedPhone))
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            return new VerificationResult(false, "Email or phone number is required.");
+            return new VerificationResult(false, "A valid email address is required.");
         }
 
-        var student = await FindStudentAsync(normalizedEmail, normalizedPhone);
+        var student = await FindStudentAsync(normalizedEmail);
         if (student == null)
         {
             return new VerificationResult(false, "Account not found.");
         }
 
-        var channel = DetermineChannel(normalizedEmail, normalizedPhone);
-        var code = await GetActiveVerificationCodeAsync(student.Id, channel);
+        var code = await GetActiveVerificationCodeAsync(student.Id);
         if (code == null)
         {
             return new VerificationResult(false, "No active verification code. Request a new one.");
@@ -325,19 +323,9 @@ public class MobileAuthService : IMobileAuthService
 
         code.ConsumedAt = DateTime.UtcNow;
 
-        if (channel == "EMAIL")
-        {
-            student.IsEmailVerified = true;
-        }
-        else
-        {
-            student.IsPhoneVerified = true;
-        }
+        student.IsEmailVerified = true;
 
-        if (student.IsEmailVerified || student.IsPhoneVerified)
-        {
-            student.VerifiedAt ??= DateTime.UtcNow;
-        }
+        student.VerifiedAt ??= DateTime.UtcNow;
 
         student.UpdatedAt = DateTime.UtcNow;
 
@@ -349,42 +337,30 @@ public class MobileAuthService : IMobileAuthService
     public async Task<ResendResult> ResendAsync(ResendRequest request)
     {
         var normalizedEmail = NormalizeEmail(request.Email);
-        var normalizedPhone = NormalizePhone(request.PhoneNumber);
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail) && string.IsNullOrWhiteSpace(normalizedPhone))
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            return new ResendResult(false, "Email or phone number is required.");
+            return new ResendResult(false, "A valid email address is required.");
         }
 
-        var student = await FindStudentAsync(normalizedEmail, normalizedPhone);
+        var student = await FindStudentAsync(normalizedEmail);
         if (student == null)
         {
             return new ResendResult(false, "Account not found.");
         }
 
-        var channel = DetermineChannel(normalizedEmail, normalizedPhone);
-        if (channel == "EMAIL" && student.IsEmailVerified || channel == "PHONE" && student.IsPhoneVerified)
+        if (student.IsEmailVerified)
         {
             return new ResendResult(false, "Account already verified.");
-        }
-
-        var target = channel == "EMAIL" ? student.Email : student.PhoneNumber;
-        if (string.IsNullOrWhiteSpace(target))
-        {
-            return new ResendResult(false, "Verification channel unavailable.");
         }
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         try
         {
-            await ExpireExistingCodesAsync(student.Id, channel);
-            var (code, expiresAt) = await CreateVerificationCodeAsync(student, channel, target);
-
-            if (channel == "EMAIL")
-            {
-                await SendVerificationEmailAsync(target, code, expiresAt);
-            }
+            await ExpireExistingCodesAsync(student.Id);
+            var (code, expiresAt) = await CreateVerificationCodeAsync(student, normalizedEmail);
+            await SendVerificationEmailAsync(normalizedEmail, code, expiresAt);
 
             await transaction.CommitAsync();
 
@@ -402,7 +378,7 @@ public class MobileAuthService : IMobileAuthService
         }
     }
 
-    private async Task<(string Code, DateTime ExpiresAt)> CreateVerificationCodeAsync(Student student, string channel, string target)
+    private async Task<(string Code, DateTime ExpiresAt)> CreateVerificationCodeAsync(Student student, string emailTarget)
     {
         var expiryMinutes = int.TryParse(_configuration["OTP_EXPIRY_MINUTES"], out var value) ? value : 10;
         var code = GenerateOtp();
@@ -411,10 +387,10 @@ public class MobileAuthService : IMobileAuthService
         var entity = new VerificationCode
         {
             StudentId = student.Id,
-            Channel = channel,
-            Purpose = Purpose,
+            Channel = "EMAIL",
+            Purpose = PurposeSignup,
             CodeHash = codeHash,
-            DeliveryTarget = target,
+            DeliveryTarget = emailTarget,
             ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes)
         };
 
@@ -424,10 +400,32 @@ public class MobileAuthService : IMobileAuthService
         return (code, entity.ExpiresAt);
     }
 
-    private async Task ExpireExistingCodesAsync(int studentId, string channel)
+    private async Task<(string Code, DateTime ExpiresAt)> CreatePasswordResetCodeAsync(Student student, string email)
+    {
+        var expiryMinutes = int.TryParse(_configuration["PASSWORD_RESET_EXPIRY_MINUTES"], out var value) ? value : 10;
+        var code = GenerateOtp();
+        var codeHash = BCrypt.Net.BCrypt.HashPassword(code);
+
+        var entity = new VerificationCode
+        {
+            StudentId = student.Id,
+            Channel = "EMAIL",
+            Purpose = PurposePasswordReset,
+            CodeHash = codeHash,
+            DeliveryTarget = email,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes)
+        };
+
+        _context.VerificationCodes.Add(entity);
+        await _context.SaveChangesAsync();
+
+        return (code, entity.ExpiresAt);
+    }
+
+    private async Task ExpireExistingCodesAsync(int studentId)
     {
         var codes = await _context.VerificationCodes
-            .Where(c => c.StudentId == studentId && c.Channel == channel && c.Purpose == Purpose && c.ConsumedAt == null && c.ExpiresAt > DateTime.UtcNow)
+            .Where(c => c.StudentId == studentId && c.Channel == "EMAIL" && c.Purpose == PurposeSignup && c.ConsumedAt == null && c.ExpiresAt > DateTime.UtcNow)
             .ToListAsync();
 
         if (codes.Count == 0)
@@ -443,10 +441,29 @@ public class MobileAuthService : IMobileAuthService
         await _context.SaveChangesAsync();
     }
 
-    private async Task<VerificationCode?> GetActiveVerificationCodeAsync(int studentId, string channel)
+    private async Task ExpireExistingPasswordResetCodesAsync(int studentId)
+    {
+        var codes = await _context.VerificationCodes
+            .Where(c => c.StudentId == studentId && c.Purpose == PurposePasswordReset && c.ConsumedAt == null && c.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+
+        if (codes.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var code in codes)
+        {
+            code.ExpiresAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task<VerificationCode?> GetActiveVerificationCodeAsync(int studentId)
     {
         return await _context.VerificationCodes
-            .Where(c => c.StudentId == studentId && c.Channel == channel && c.Purpose == Purpose && c.ConsumedAt == null)
+            .Where(c => c.StudentId == studentId && c.Channel == "EMAIL" && c.Purpose == PurposeSignup && c.ConsumedAt == null)
             .OrderByDescending(c => c.CreatedAt)
             .FirstOrDefaultAsync();
     }
@@ -500,11 +517,6 @@ public class MobileAuthService : IMobileAuthService
             claims.Add(new Claim(ClaimTypes.Email, student.Email));
         }
 
-        if (!string.IsNullOrWhiteSpace(student.PhoneNumber))
-        {
-            claims.Add(new Claim(ClaimTypes.MobilePhone, student.PhoneNumber));
-        }
-
         var expiresAt = DateTime.UtcNow.AddMinutes(tokenMinutes);
         var token = new JwtSecurityToken(
             issuer: jwtIssuer,
@@ -516,10 +528,6 @@ public class MobileAuthService : IMobileAuthService
         return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 
-    private static string GenerateResetToken()
-    {
-        return Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-    }
 
     private async Task SendVerificationEmailAsync(string email, string code, DateTime expiresAt)
     {
@@ -529,25 +537,16 @@ public class MobileAuthService : IMobileAuthService
         await _emailSender.SendAsync(email, "Verify your Journey account", message);
     }
 
-    private async Task SendPasswordResetEmailAsync(string email, string token, int expiresInMinutes)
+    private async Task SendPasswordResetOtpEmailAsync(string email, string code, DateTime expiresAt)
     {
-        var message = $"You requested to reset your Journey password. Use the code {token} to complete the reset. The code expires in {expiresInMinutes} minute(s). If you did not request this, please ignore this email.";
+        var minutes = Math.Max(1, (int)Math.Ceiling((expiresAt - DateTime.UtcNow).TotalMinutes));
+        var message = $"Your Journey password reset code is {code}. It expires in {minutes} minute(s). If you did not request this, please ignore this email.";
         await _emailSender.SendAsync(email, "Reset your Journey password", message);
     }
 
-    private async Task<Student?> FindStudentAsync(string? email, string? phone)
+    private async Task<Student?> FindStudentAsync(string email)
     {
-        if (!string.IsNullOrWhiteSpace(email))
-        {
-            return await _context.Students.FirstOrDefaultAsync(s => s.Email == email);
-        }
-
-        if (!string.IsNullOrWhiteSpace(phone))
-        {
-            return await _context.Students.FirstOrDefaultAsync(s => s.PhoneNumber == phone);
-        }
-
-        return null;
+        return await _context.Students.FirstOrDefaultAsync(s => s.Email == email);
     }
 
     private static string? NormalizeEmail(string? value)
@@ -555,15 +554,28 @@ public class MobileAuthService : IMobileAuthService
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
     }
 
-    private static string? NormalizePhone(string? value)
+    private bool ValidatePasswordComplexity(string password, out string errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
         {
-            return null;
+            errorMessage = "Password must be at least 8 characters long.";
+            return false;
         }
 
-        var digits = Regex.Replace(value, "[^0-9+]", string.Empty);
-        return string.IsNullOrWhiteSpace(digits) ? null : digits;
+        if (!password.Any(char.IsUpper))
+        {
+            errorMessage = "Password must contain at least one uppercase letter.";
+            return false;
+        }
+
+        if (!Regex.IsMatch(password, @"[\W_]"))
+        {
+            errorMessage = "Password must contain at least one special character.";
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
     }
 
     private static string GenerateOtp()
@@ -576,7 +588,5 @@ public class MobileAuthService : IMobileAuthService
         }
         return new string(buffer);
     }
-
-    private static string DetermineChannel(string? email, string? phone) => string.IsNullOrWhiteSpace(email) ? "PHONE" : "EMAIL";
 }
 

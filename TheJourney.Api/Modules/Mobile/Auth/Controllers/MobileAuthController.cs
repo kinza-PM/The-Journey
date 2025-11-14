@@ -17,7 +17,7 @@ public class MobileAuthController : ControllerBase
     [HttpPost("signup")]
     public async Task<IActionResult> Signup([FromBody] SignupRequestDto dto)
     {
-        var result = await _mobileAuthService.SignupAsync(new SignupRequest(dto.Email, dto.PhoneNumber, dto.Password, dto.FullName));
+        var result = await _mobileAuthService.SignupAsync(new SignupRequest(dto.Email, dto.Password, dto.FullName));
         if (!result.Success)
         {
             return BadRequest(new { message = result.Message });
@@ -35,7 +35,7 @@ public class MobileAuthController : ControllerBase
     [HttpPost("verify")]
     public async Task<IActionResult> Verify([FromBody] VerifyRequestDto dto)
     {
-        var result = await _mobileAuthService.VerifyAsync(new VerificationRequest(dto.Email, dto.PhoneNumber, dto.Code));
+        var result = await _mobileAuthService.VerifyAsync(new VerificationRequest(dto.Email, dto.Code));
         if (!result.Success)
         {
             return BadRequest(new { message = result.Message });
@@ -47,7 +47,7 @@ public class MobileAuthController : ControllerBase
     [HttpPost("resend-otp")]
     public async Task<IActionResult> Resend([FromBody] ResendOtpRequestDto dto)
     {
-        var result = await _mobileAuthService.ResendAsync(new ResendRequest(dto.Email, dto.PhoneNumber));
+        var result = await _mobileAuthService.ResendAsync(new ResendRequest(dto.Email));
         if (!result.Success)
         {
             return BadRequest(new { message = result.Message });
@@ -64,7 +64,7 @@ public class MobileAuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto dto)
     {
-        var result = await _mobileAuthService.LoginAsync(new LoginRequest(dto.Email, dto.PhoneNumber, dto.Password));
+        var result = await _mobileAuthService.LoginAsync(new LoginRequest(dto.Email, dto.Password));
         if (!result.Success)
         {
             return Unauthorized(new { message = result.Message });
@@ -82,13 +82,13 @@ public class MobileAuthController : ControllerBase
             return BadRequest(new { message = result.Message });
         }
 
-        return Ok(new { message = result.Message, code = result.DebugToken, expiresInSeconds = result.ExpiresInSeconds });
+        return Ok(new { message = result.Message, code = result.DebugCode, expiresInSeconds = result.ExpiresInSeconds });
     }
 
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto dto)
     {
-        var result = await _mobileAuthService.ResetPasswordAsync(new PasswordResetConfirmRequest(dto.Email, dto.Token, dto.NewPassword));
+        var result = await _mobileAuthService.ResetPasswordAsync(new PasswordResetConfirmRequest(dto.Email, dto.OtpCode, dto.NewPassword, dto.ConfirmPassword));
         if (!result.Success)
         {
             return BadRequest(new { message = result.Message });
@@ -98,10 +98,10 @@ public class MobileAuthController : ControllerBase
     }
 }
 
-public record SignupRequestDto(string? Email, string? PhoneNumber, string Password, string FullName);
-public record VerifyRequestDto(string? Email, string? PhoneNumber, string Code);
-public record ResendOtpRequestDto(string? Email, string? PhoneNumber);
-public record LoginRequestDto(string? Email, string? PhoneNumber, string Password);
+public record SignupRequestDto(string Email, string Password, string? FullName);
+public record VerifyRequestDto(string Email, string Code);
+public record ResendOtpRequestDto(string Email);
+public record LoginRequestDto(string Email, string Password);
 public record ForgotPasswordRequestDto(string Email);
-public record ResetPasswordRequestDto(string Email, string Token, string NewPassword);
+public record ResetPasswordRequestDto(string Email, string OtpCode, string NewPassword, string ConfirmPassword);
 

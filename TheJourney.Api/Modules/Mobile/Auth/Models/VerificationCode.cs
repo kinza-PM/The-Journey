@@ -8,7 +8,7 @@ public class VerificationCode
     public int StudentId { get; set; }
 
     [Required]
-    [MaxLength(12)]
+    [MaxLength(20)]
     public string Purpose { get; set; } = "SIGNUP";
 
     [Required]

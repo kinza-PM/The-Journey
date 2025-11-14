@@ -51,10 +51,8 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.FullName).IsRequired().HasMaxLength(150);
             entity.Property(e => e.Email).HasMaxLength(255);
-            entity.Property(e => e.PhoneNumber).HasMaxLength(20);
             entity.Property(e => e.PasswordHash).IsRequired();
             entity.HasIndex(e => e.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
-            entity.HasIndex(e => e.PhoneNumber).IsUnique().HasFilter("\"PhoneNumber\" IS NOT NULL");
         });
 
         modelBuilder.Entity<VerificationCode>(entity =>
