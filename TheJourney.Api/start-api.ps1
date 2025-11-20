@@ -1,7 +1,7 @@
 # Set environment variables
 $env:PG_HOST="journey.postgres.database.azure.com"
 $env:PG_USER="journeyDev"
-$env:PG_PASSWORD="Secure@PgSQL17"
+$env:PG_PASSWORD="M.AbuBakar@"
 $env:PG_DB="postgres"
 $env:JWT_SECRET="TheJourney-Super-Secret-JWT-Key-For-Authentication-2024!"
 $env:JWT_ISSUER="TheJourney.Api"
@@ -11,7 +11,7 @@ $env:SEED_ADMIN_PASSWORD="Admin@123Secure"
 $env:LOCKOUT_MAX_ATTEMPTS="5"
 $env:LOCKOUT_MINUTES="15"
 $env:OTP_EXPIRY_MINUTES="10"
-$env:MAILTRAP_SMTP_HOST="sandbox.smtp.mailtrap.io"
+$env:MAILTRAP_SMTP_HOST="sandbox.smtpme.mailtrap.io"
 $env:MAILTRAP_SMTP_PORT="2525"
 $env:MAILTRAP_SMTP_USERNAME="53f5b609367e98"
 $env:MAILTRAP_SMTP_PASSWORD="c990bd5dea90e1"
@@ -24,3 +24,4 @@ $env:PASSWORD_RESET_EXPIRY_MINUTES="30"
 Write-Host "Environment variables set. Starting API..."
 dotnet run
 
++971552640152
