@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TheJourney.Api.Infrastructure.Database;
@@ -11,9 +12,11 @@ using TheJourney.Api.Infrastructure.Database;
 namespace TheJourney.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251117070326_AddCareerFramework")]
+    partial class AddCareerFramework
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -585,6 +588,38 @@ namespace TheJourney.Api.Migrations
                     b.ToTable("StudentAssessments");
                 });
 
+            modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Assessment.Models.StudentCv", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ExtractedDataJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("StudentCvs");
+                });
+
             modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Auth.Models.Student", b =>
                 {
                     b.Property<int>("Id")
@@ -909,6 +944,17 @@ namespace TheJourney.Api.Migrations
                     b.Navigation("AssessmentTemplate");
 
                     b.Navigation("JobRole");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Assessment.Models.StudentCv", b =>
+                {
+                    b.HasOne("TheJourney.Api.Modules.Mobile.Auth.Models.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Student");
                 });
