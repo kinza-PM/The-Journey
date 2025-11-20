@@ -23,5 +23,3 @@ $env:PASSWORD_RESET_EXPIRY_MINUTES="30"
 
 Write-Host "Environment variables set. Starting API..."
 dotnet run
-
-+971552640152
