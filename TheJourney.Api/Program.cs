@@ -97,6 +97,10 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+// HttpClient factory used by LinkedInController and other services
+builder.Services.AddHttpClient();
+// In-memory cache for storing OAuth state
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailSender, MailtrapSmtpEmailSender>();
 builder.Services.AddScoped<IMobileAuthService, MobileAuthService>();

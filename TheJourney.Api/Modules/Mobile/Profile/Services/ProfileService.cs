@@ -52,6 +52,119 @@ public class ProfileService : IProfileService
         };
     }
 
+    public async Task ImportLinkedInProfileAsync(int studentId, LinkedInProfileDto profile)
+    {
+        // Update basic student data if available
+        var student = await _context.Set<TheJourney.Api.Modules.Mobile.Auth.Models.Student>().FindAsync(studentId);
+        if (student != null)
+        {
+            var fullName = ((profile.FirstName ?? string.Empty) + " " + (profile.LastName ?? string.Empty)).Trim();
+            if (!string.IsNullOrWhiteSpace(fullName)) student.FullName = fullName;
+            if (!string.IsNullOrWhiteSpace(profile.Email)) student.Email = profile.Email;
+            student.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Map positions to experiences (best-effort if provided)
+        if (profile.Positions != null && profile.Positions.Count > 0)
+        {
+            // Clear existing experiences for now and re-create
+            var existing = await _context.Set<StudentExperience>().Where(e => e.StudentId == studentId).ToListAsync();
+            _context.Set<StudentExperience>().RemoveRange(existing);
+
+            foreach (var pos in profile.Positions)
+            {
+                var sExp = new StudentExperience
+                {
+                    StudentId = studentId,
+                    CompanyName = pos.Company,
+                    JobTitle = pos.Title,
+                    StartDate = pos.StartDate,
+                    EndDate = pos.EndDate,
+                    Description = pos.Description,
+                    Location = pos.Location,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Set<StudentExperience>().Add(sExp);
+            }
+        }
+
+        // Map educations
+        if (profile.Educations != null && profile.Educations.Count > 0)
+        {
+            var existing = await _context.Set<StudentEducation>().Where(e => e.StudentId == studentId).ToListAsync();
+            _context.Set<StudentEducation>().RemoveRange(existing);
+            foreach (var edu in profile.Educations)
+            {
+                var sEdu = new StudentEducation
+                {
+                    StudentId = studentId,
+                    Institution = edu.SchoolName,
+                    Degree = edu.Degree,
+                    FieldOfStudy = edu.FieldOfStudy,
+                    StartDate = edu.StartDate,
+                    EndDate = edu.EndDate,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Set<StudentEducation>().Add(sEdu);
+            }
+        }
+
+        // Map skills
+        if (profile.Skills != null && profile.Skills.Count > 0)
+        {
+            var existing = await _context.Set<StudentSkill>().Where(s => s.StudentId == studentId).ToListAsync();
+            _context.Set<StudentSkill>().RemoveRange(existing);
+            foreach (var skill in profile.Skills)
+            {
+                var sSkill = new StudentSkill
+                {
+                    StudentId = studentId,
+                    SkillName = skill,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Set<StudentSkill>().Add(sSkill);
+            }
+        }
+
+        // Map projects
+        if (profile.Projects != null && profile.Projects.Count > 0)
+        {
+            var existing = await _context.Set<StudentProject>().Where(p => p.StudentId == studentId).ToListAsync();
+            _context.Set<StudentProject>().RemoveRange(existing);
+            foreach (var proj in profile.Projects)
+            {
+                var sProj = new StudentProject
+                {
+                    StudentId = studentId,
+                    ProjectName = proj.Title ?? string.Empty,
+                    Description = proj.Description,
+                    Url = proj.Url,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Set<StudentProject>().Add(sProj);
+            }
+        }
+
+        // Map languages
+        if (profile.Languages != null && profile.Languages.Count > 0)
+        {
+            var existing = await _context.Set<StudentLanguage>().Where(l => l.StudentId == studentId).ToListAsync();
+            _context.Set<StudentLanguage>().RemoveRange(existing);
+            foreach (var lang in profile.Languages)
+            {
+                var sLang = new StudentLanguage
+                {
+                    StudentId = studentId,
+                    LanguageName = lang,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Set<StudentLanguage>().Add(sLang);
+            }
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<ProfileExtractionResult> ExtractAndSaveResumeAsync(int studentId, Stream pdfStream)
     {
         // Extract data from PDF

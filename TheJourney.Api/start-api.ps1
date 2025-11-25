@@ -21,5 +21,11 @@ $env:STUDENT_LOCKOUT_MAX_ATTEMPTS="5"
 $env:STUDENT_LOCKOUT_MINUTES="15"
 $env:PASSWORD_RESET_EXPIRY_MINUTES="30"
 
+# LinkedIn OAuth config - replace placeholders with your app values
+$env:LINKEDIN_CLIENT_ID="78p2zamtuc89wk"
+$env:LINKEDIN_CLIENT_SECRET="WPL_AP1.EA8bbbDVNUAsfuRD.cdvkwQ=="
+# Example redirect URI for local development. Make sure this matches the redirect registered in your LinkedIn app.
+$env:LINKEDIN_REDIRECT_URI="http://localhost:5097/api/mobile/auth/linkedin/callback"
+
 Write-Host "Environment variables set. Starting API..."
 dotnet run
