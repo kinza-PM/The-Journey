@@ -22,8 +22,8 @@ $env:STUDENT_LOCKOUT_MINUTES="15"
 $env:PASSWORD_RESET_EXPIRY_MINUTES="30"
 
 # LinkedIn OAuth config - replace placeholders with your app values
-$env:LINKEDIN_CLIENT_ID="78p2zamtuc89wk"
-$env:LINKEDIN_CLIENT_SECRET="WPL_AP1.EA8bbbDVNUAsfuRD.cdvkwQ=="
+$env:LINKEDIN_CLIENT_ID="78p2zamtuc89wk11"
+$env:LINKEDIN_CLIENT_SECRET="WPL_AP1.EA8bbbDVNUAsfuRD.cdvkwQ==11"
 # Example redirect URI for local development. Make sure this matches the redirect registered in your LinkedIn app.
 $env:LINKEDIN_REDIRECT_URI="http://localhost:5097/api/mobile/auth/linkedin/callback"
 
