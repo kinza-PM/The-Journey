@@ -5,7 +5,7 @@ namespace TheJourney.Api.Modules.Mobile.Profile.Services;
 
 public interface IProfileService
 {
-    Task<ProfileExtractionResult> ExtractAndSaveResumeAsync(int studentId, Stream pdfStream);
+    Task<ProfileExtractionResult> ExtractAndSaveResumeAsync(int studentId, Stream stream, string contentType, string fileName);
     Task<ProfileDataResult> GetProfileAsync(int studentId);
     Task ImportLinkedInProfileAsync(int studentId, LinkedInProfileDto profile);
     Task<ProfileSuggestionResult> GetAiSuggestionsAsync(int studentId);

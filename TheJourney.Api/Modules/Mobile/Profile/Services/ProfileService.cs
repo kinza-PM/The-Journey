@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TheJourney.Api.Infrastructure.Database;
 using TheJourney.Api.Modules.Mobile.Profile.Models;
 
@@ -530,10 +531,10 @@ public class ProfileService : IProfileService
         await _context.SaveChangesAsync();
     }
 
-    public async Task<ProfileExtractionResult> ExtractAndSaveResumeAsync(int studentId, Stream pdfStream)
+    public async Task<ProfileExtractionResult> ExtractAndSaveResumeAsync(int studentId, Stream stream, string contentType, string fileName)
     {
-        // Extract data from PDF
-        var extractionResult = await _resumeExtractionService.ExtractFromPdfAsync(pdfStream);
+        // Extract data from file (PDF, DOCX, or fallback)
+        var extractionResult = await _resumeExtractionService.ExtractFromFileAsync(stream, contentType, fileName);
 
         // Clear existing data for this student (optional - you might want to keep history)
         // For now, we'll replace existing data
