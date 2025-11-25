@@ -8,10 +8,9 @@ using Microsoft.OpenApi.Models;
 using TheJourney.Api.Infrastructure.Database;
 using TheJourney.Api.Modules.Admin.Auth.Models;
 using TheJourney.Api.Modules.Admin.Auth.Services;
-using TheJourney.Api.Modules.Admin.CareerFramework.Services;
-using TheJourney.Api.Modules.Mobile.Assessment.Services;
 using TheJourney.Api.Modules.Mobile.Auth.Notifications;
 using TheJourney.Api.Modules.Mobile.Auth.Services;
+using TheJourney.Api.Modules.Mobile.Profile.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -98,12 +97,15 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+// HttpClient factory used by LinkedInController and other services
+builder.Services.AddHttpClient();
+// In-memory cache for storing OAuth state
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailSender, MailtrapSmtpEmailSender>();
 builder.Services.AddScoped<IMobileAuthService, MobileAuthService>();
-builder.Services.AddScoped<ICareerFrameworkService, CareerFrameworkService>();
-builder.Services.AddScoped<IFitScoreCalculator, FitScoreCalculator>();
-builder.Services.AddScoped<IAssessmentService, AssessmentService>();
+builder.Services.AddScoped<IResumeExtractionService, ResumeExtractionService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();

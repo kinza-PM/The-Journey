@@ -107,7 +107,7 @@ public class MobileAuthService : IMobileAuthService
             await _context.SaveChangesAsync();
 
             var (code, expiresAt) = await CreateVerificationCodeAsync(student, normalizedEmail);
-            await SendVerificationEmailAsync(normalizedEmail, code, expiresAt);
+            // await SendVerificationEmailAsync(normalizedEmail, code, expiresAt);
 
             await transaction.CommitAsync();
 
