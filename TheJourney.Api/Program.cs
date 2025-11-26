@@ -94,13 +94,56 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+// Configure CORS for mobile apps
+var allowedOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")?.Split(',') 
+    ?? new[] { "*" }; // Default to allow all in development
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowMobileApps", policy =>
+    {
+        if (allowedOrigins.Contains("*"))
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
+    });
+});
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "TheJourney API", Version = "v1" });
+    var apiBaseUrl = Environment.GetEnvironmentVariable("API_BASE_URL") 
+        ?? "https://thejourney-api-dev-b0hscbf3eqchhsak.centralus-01.azurewebsites.net";
+    
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "TheJourney API", 
+        Version = "v1",
+        Description = "TheJourney API - Production Environment",
+        Contact = new OpenApiContact
+        {
+            Name = "TheJourney API Support"
+        }
+    });
+    
+    // Add production server URL
+    c.AddServer(new OpenApiServer
+    {
+        Url = apiBaseUrl,
+        Description = "Production Server"
+    });
     
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -129,12 +172,16 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments (useful for API documentation)
+// To disable in production, set ENABLE_SWAGGER=false environment variable
+var enableSwagger = Environment.GetEnvironmentVariable("ENABLE_SWAGGER") != "false";
+if (enableSwagger || app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+app.UseCors("AllowMobileApps");
 app.UseHttpsRedirection();
 app.UseSession();
 app.UseAuthentication();
