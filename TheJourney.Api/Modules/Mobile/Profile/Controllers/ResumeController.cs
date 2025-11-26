@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.IO;
 using TheJourney.Api.Modules.Mobile.Assessment.Controllers;
 using TheJourney.Api.Modules.Mobile.Profile.Services;
 
@@ -58,23 +59,30 @@ public class ResumeController : StudentAuthorizedController
             return BadRequest(new { message = "No file uploaded." });
         }
 
-        // Validate file extension
-        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        // Validate file extension (allow .pdf, .doc, .docx)
+        var allowedExt = new[] { ".pdf", ".doc", ".docx" };
+        var ext = Path.GetExtension(file.FileName ?? string.Empty).ToLowerInvariant();
+        if (!allowedExt.Contains(ext))
         {
-            return BadRequest(new { message = "Only PDF files are allowed. File must have .pdf extension." });
+            return BadRequest(new { message = "Only .pdf, .doc, and .docx files are allowed." });
         }
 
-        // Validate ContentType
-        if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+        // Validate ContentType if provided (common MIME types)
+        var allowedMime = new[] {
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
+        if (!string.IsNullOrWhiteSpace(file.ContentType) && !allowedMime.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
         {
-            return BadRequest(new { message = "Only PDF files are allowed. Invalid file type." });
+            return BadRequest(new { message = $"Invalid file content type: {file.ContentType}. Expected PDF or Word document." });
         }
 
-        // Validate file size (e.g., max 10MB)
-        const long maxFileSize = 10 * 1024 * 1024; // 10MB
+        // Validate file size (max 20MB)
+        const long maxFileSize = 20 * 1024 * 1024; // 20MB
         if (file.Length > maxFileSize)
         {
-            return BadRequest(new { message = "File size exceeds the maximum limit of 10MB." });
+            return BadRequest(new { message = "File size exceeds the maximum limit of 20MB." });
         }
 
         
@@ -82,7 +90,7 @@ public class ResumeController : StudentAuthorizedController
         try
         {
             using var stream = file.OpenReadStream();
-            var result = await _profileService.ExtractAndSaveResumeAsync(studentId.Value, stream);
+            var result = await _profileService.ExtractAndSaveResumeAsync(studentId.Value, stream, file.ContentType ?? string.Empty, file.FileName ?? string.Empty);
 
             return Ok(new
             {
