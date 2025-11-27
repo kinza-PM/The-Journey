@@ -174,12 +174,12 @@ var app = builder.Build();
 
 // Enable Swagger in all environments (useful for API documentation)
 // To disable in production, set ENABLE_SWAGGER=false environment variable
-var enableSwagger = Environment.GetEnvironmentVariable("ENABLE_SWAGGER") != "false";
-if (enableSwagger || app.Environment.IsDevelopment())
-{
+// var enableSwagger = Environment.GetEnvironmentVariable("ENABLE_SWAGGER") != "false";
+// if (enableSwagger || app.Environment.IsDevelopment())
+// {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+// }
 
 app.UseCors("AllowMobileApps");
 app.UseHttpsRedirection();
