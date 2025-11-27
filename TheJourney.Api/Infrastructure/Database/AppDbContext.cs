@@ -3,6 +3,7 @@ using TheJourney.Api.Modules.Admin.Auth.Models;
 using TheJourney.Api.Modules.Admin.CareerFramework.Models;
 using TheJourney.Api.Modules.Mobile.Assessment.Models;
 using TheJourney.Api.Modules.Mobile.Auth.Models;
+using TheJourney.Api.Modules.Mobile.Profile.Models;
 
 namespace TheJourney.Api.Infrastructure.Database;
 
@@ -29,6 +30,11 @@ public class AppDbContext : DbContext
     public DbSet<MajorIndustryMapping> MajorIndustryMappings { get; set; }
     public DbSet<StudentAssessment> StudentAssessments { get; set; }
     public DbSet<AssessmentAnswer> AssessmentAnswers { get; set; }
+    public DbSet<StudentEducation> StudentEducations { get; set; }
+    public DbSet<StudentSkill> StudentSkills { get; set; }
+    public DbSet<StudentExperience> StudentExperiences { get; set; }
+    public DbSet<StudentProject> StudentProjects { get; set; }
+    public DbSet<StudentLanguage> StudentLanguages { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -278,6 +284,84 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.SkillId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StudentEducation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Institution).HasMaxLength(200);
+            entity.Property(e => e.Degree).HasMaxLength(200);
+            entity.Property(e => e.FieldOfStudy).HasMaxLength(100);
+            entity.Property(e => e.StartDate).HasMaxLength(50);
+            entity.Property(e => e.EndDate).HasMaxLength(50);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.HasIndex(e => e.StudentId);
+
+            entity.HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StudentSkill>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SkillName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.ProficiencyLevel).HasMaxLength(50);
+            entity.Property(e => e.Category).HasMaxLength(50);
+            entity.HasIndex(e => e.StudentId);
+
+            entity.HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StudentExperience>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.CompanyName).HasMaxLength(200);
+            entity.Property(e => e.JobTitle).HasMaxLength(200);
+            entity.Property(e => e.StartDate).HasMaxLength(50);
+            entity.Property(e => e.EndDate).HasMaxLength(50);
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.Location).HasMaxLength(200);
+            entity.HasIndex(e => e.StudentId);
+
+            entity.HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StudentProject>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProjectName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.StartDate).HasMaxLength(50);
+            entity.Property(e => e.EndDate).HasMaxLength(50);
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.Technologies).HasMaxLength(500);
+            entity.Property(e => e.Url).HasMaxLength(500);
+            entity.HasIndex(e => e.StudentId);
+
+            entity.HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StudentLanguage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.LanguageName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.ProficiencyLevel).HasMaxLength(50);
+            entity.HasIndex(e => e.StudentId);
+
+            entity.HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -4,7 +4,13 @@ namespace TheJourney.Api.Modules.Mobile.Profile.Services;
 
 public interface IResumeExtractionService
 {
-    Task<ResumeExtractionResult> ExtractFromPdfAsync(Stream pdfStream);
+    /// <summary>
+    /// Extract structured resume data from an uploaded file stream. Supports PDF and DOCX. DOC is best-effort.
+    /// </summary>
+    /// <param name="stream">The uploaded file stream (position at start).</param>
+    /// <param name="contentType">The uploaded content type as provided by the client.</param>
+    /// <param name="fileName">The original file name uploaded by the client.</param>
+    Task<ResumeExtractionResult> ExtractFromFileAsync(Stream stream, string contentType, string fileName);
 }
 
 public class ResumeExtractionResult

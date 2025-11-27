@@ -12,6 +12,7 @@ using TheJourney.Api.Modules.Admin.CareerFramework.Services;
 using TheJourney.Api.Modules.Mobile.Assessment.Services;
 using TheJourney.Api.Modules.Mobile.Auth.Notifications;
 using TheJourney.Api.Modules.Mobile.Auth.Services;
+using TheJourney.Api.Modules.Mobile.Profile.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -98,12 +99,19 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+// HttpClient factory used by LinkedInController and other services
+builder.Services.AddHttpClient();
+// In-memory cache for storing OAuth state
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailSender, MailtrapSmtpEmailSender>();
 builder.Services.AddScoped<IMobileAuthService, MobileAuthService>();
 builder.Services.AddScoped<ICareerFrameworkService, CareerFrameworkService>();
 builder.Services.AddScoped<IFitScoreCalculator, FitScoreCalculator>();
 builder.Services.AddScoped<IAssessmentService, AssessmentService>();
+builder.Services.AddScoped<IResumeExtractionService, ResumeExtractionService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
+
 // Configure CORS for mobile apps
 var allowedOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")?.Split(',') 
     ?? new[] { "*" }; // Default to allow all in development
