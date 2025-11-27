@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TheJourney.Api.Infrastructure.Database;
-using TheJourney.Api.Modules.Admin.Auth.Models;
+using AdminModel = TheJourney.Api.Modules.Admin.Auth.Models.Admin;
+using LoginAttempt = TheJourney.Api.Modules.Admin.Auth.Models.LoginAttempt;
 
 namespace TheJourney.Api.Modules.Auth.Services;
 
@@ -190,7 +191,7 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
     }
     
-    private string GenerateJwtToken(Admin admin)
+    private string GenerateJwtToken(AdminModel admin)
     {
         if (string.IsNullOrWhiteSpace(admin.Role))
         {
