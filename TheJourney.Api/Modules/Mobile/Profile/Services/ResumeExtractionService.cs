@@ -2,48 +2,138 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using TheJourney.Api.Modules.Mobile.Profile.Models;
 
 namespace TheJourney.Api.Modules.Mobile.Profile.Services;
 
 public class ResumeExtractionService : IResumeExtractionService
 {
-    public async Task<ResumeExtractionResult> ExtractFromPdfAsync(Stream pdfStream)
+    public async Task<ResumeExtractionResult> ExtractFromFileAsync(Stream stream, string contentType, string fileName)
     {
-        var result = new ResumeExtractionResult();
-        
-        // Extract text from PDF
-        var text = await ExtractTextFromPdfAsync(pdfStream);
-        
-        if (string.IsNullOrWhiteSpace(text))
+        // Normalize parameters
+        contentType ??= string.Empty;
+        fileName ??= string.Empty;
+
+        // Decide by extension first for robustness
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+
+        string text = string.Empty;
+
+        try
         {
-            return result;
+            if (ext == ".pdf" || contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                text = await ExtractTextFromPdfAsync(stream);
+            }
+            else if (ext == ".docx" || contentType.Equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", StringComparison.OrdinalIgnoreCase))
+            {
+                text = await ExtractTextFromDocxAsync(stream);
+            }
+            else if (ext == ".doc" || contentType.Equals("application/msword", StringComparison.OrdinalIgnoreCase))
+            {
+                // Best-effort fallback for legacy .doc
+                text = await ExtractTextFallbackAsync(stream);
+            }
+            else
+            {
+                // Try to detect by content-type; fallback to PDF extraction attempt
+                if (contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = await ExtractTextFromPdfAsync(stream);
+                }
+                else if (contentType.Contains("wordprocessingml", StringComparison.OrdinalIgnoreCase) || contentType.Contains("openxml", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = await ExtractTextFromDocxAsync(stream);
+                }
+                else
+                {
+                    // Last resort: try PDF extraction then text fallback
+                    text = await ExtractTextFromPdfAsync(stream);
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        text = await ExtractTextFallbackAsync(stream);
+                    }
+                }
+            }
         }
-        
-        // Normalize text
+        catch
+        {
+            // On any extraction error, attempt fallback
+            try { text = await ExtractTextFallbackAsync(stream); } catch { text = string.Empty; }
+        }
+
+        var result = new ResumeExtractionResult();
+
+        if (string.IsNullOrWhiteSpace(text)) return result;
+
         text = NormalizeText(text);
-        
-        // Extract different sections
+
         result.Educations = ExtractEducations(text);
         result.Skills = ExtractSkills(text);
         result.Experiences = ExtractExperiences(text);
         result.Projects = ExtractProjects(text);
         result.Languages = ExtractLanguages(text);
-        
+
         return result;
     }
     
     private async Task<string> ExtractTextFromPdfAsync(Stream pdfStream)
     {
         var textBuilder = new StringBuilder();
-        
+        // Ensure stream position at start
+        if (pdfStream.CanSeek) pdfStream.Seek(0, SeekOrigin.Begin);
+
         using var document = PdfDocument.Open(pdfStream);
         foreach (var page in document.GetPages())
         {
             textBuilder.AppendLine(page.Text);
         }
-        
+
         return textBuilder.ToString();
+    }
+
+    private async Task<string> ExtractTextFromDocxAsync(Stream docxStream)
+    {
+        if (docxStream.CanSeek) docxStream.Seek(0, SeekOrigin.Begin);
+
+        using var mem = new MemoryStream();
+        await docxStream.CopyToAsync(mem);
+        mem.Seek(0, SeekOrigin.Begin);
+
+        using var word = WordprocessingDocument.Open(mem, false);
+        var body = word.MainDocumentPart?.Document?.Body;
+        if (body == null) return string.Empty;
+
+        return body.InnerText ?? string.Empty;
+    }
+
+    private async Task<string> ExtractTextFallbackAsync(Stream stream)
+    {
+        // Best-effort plain text extraction for legacy .doc or unknown types
+        if (stream.CanSeek) stream.Seek(0, SeekOrigin.Begin);
+        using var mem = new MemoryStream();
+        await stream.CopyToAsync(mem);
+        var bytes = mem.ToArray();
+
+        // Try UTF8 then fallback to Latin1
+        try
+        {
+            var text = Encoding.UTF8.GetString(bytes);
+            if (!string.IsNullOrWhiteSpace(text) && text.Any(c => !char.IsControl(c) || c=='\n' || c=='\r'))
+                return text;
+        }
+        catch { }
+
+        try
+        {
+            var text = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
+            return text;
+        }
+        catch { }
+
+        return string.Empty;
     }
     
     private string NormalizeText(string text)
