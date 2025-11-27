@@ -1,250 +1,106 @@
-# TheJourney API - Admin Login & RBAC
+# TheJourney API – Admin Authentication
 
-Testing Azure 
+A professional .NET 8 Web API with PostgreSQL, JWT and Session authentication, Role-Based Access Control (RBAC), and comprehensive audit logging. Provides admin login, JWT and session authentication, role-based access control, and login audit logging backed by PostgreSQL.
 
-A professional .NET 8 Web API with PostgreSQL, JWT and Session authentication, Role-Based Access Control (RBAC), and comprehensive audit logging.
+## Tech Stack
+- ASP.NET Core 8
+- Entity Framework Core + Npgsql
+- PostgreSQL
+- JWT & cookie-based sessions
+- BCrypt password hashing
 
-## ✅ Status: READY TO USE
+## Prerequisites
+- .NET 8 SDK
+- PostgreSQL (or Azure Database for PostgreSQL)
+- PowerShell (for convenience scripts)
 
-- ✅ Database migrations applied successfully
-- ✅ SuperAdmin seeded and ready
-- ✅ All ticket requirements implemented
-- ✅ JWT and Session authentication supported
-- ✅ Failed login attempts logged
-- ✅ Role validation enforced (no role = no access)
+## Configuration
+Set the following environment variables before running the API. The `start-api.ps1` script demonstrates how to configure them locally.
 
-## 🚀 Quick Start
+```
+PG_HOST
+PG_USER
+PG_PASSWORD
+PG_DB
+JWT_SECRET          (≥ 32 chars)
+JWT_ISSUER
+JWT_AUDIENCE
+SEED_ADMIN_EMAIL
+SEED_ADMIN_PASSWORD
+LOCKOUT_MAX_ATTEMPTS (default 5)
+LOCKOUT_MINUTES      (default 15)
+OTP_EXPIRY_MINUTES   (default 10)
+MAILTRAP_SMTP_HOST
+MAILTRAP_SMTP_PORT
+MAILTRAP_SMTP_USERNAME
+MAILTRAP_SMTP_PASSWORD
+MAILTRAP_FROM_EMAIL
+STUDENT_JWT_EXPIRY_MINUTES (default 60)
+STUDENT_LOCKOUT_MAX_ATTEMPTS (default 5)
+STUDENT_LOCKOUT_MINUTES (default 15)
+PASSWORD_RESET_EXPIRY_MINUTES (default 30)
+```
 
-### 1. Start the API
+## Setup
 ```powershell
 cd TheJourney.Api
+dotnet restore
+dotnet ef database update   # applies migrations + seeds SuperAdmin if env vars are present
+```
+
+If you are using Mailtrap's sandbox SMTP credentials, configure auto-forwarding in the Mailtrap UI so OTP and reset emails reach your test inboxes.
+
+## Run
+```powershell
+# recommended – sets env vars then runs the API
 .\start-api.ps1
+
+# manual alternative
+dotnet run
 ```
 
-### 2. Test Login
-Open Swagger UI: **https://localhost:7145/swagger**
+Swagger UI: `https://localhost:7145/swagger`
 
-Use credentials:
-- **Email**: `admin@thejourney.com`
-- **Password**: `Admin@123Secure`
+## Authentication Flow
+- `POST /api/auth/login` (query `authType=SESSION` to request cookie-based session)
+- `POST /api/auth/logout`
+- `GET /api/auth/protected` – any authenticated admin with a role
+- `GET /api/auth/admin-access` – Admin or SuperAdmin
+- `GET /api/auth/superadmin-only` – SuperAdmin only
+- `POST /api/mobile/auth/signup` – student signup via email (OTP via email; password requires ≥8 chars, uppercase, special character)
+- `POST /api/mobile/auth/verify` – confirm OTP for email
+- `POST /api/mobile/auth/resend-otp` – request another OTP when expired
+- `POST /api/mobile/auth/login` – JWT login with email/password
+- `POST /api/mobile/auth/forgot-password` – request password reset OTP (sent to email)
+- `POST /api/mobile/auth/reset-password` – verify OTP and set new password (requires OTP code, new password, and confirm password)
 
-### 3. Authentication Options
+Successful and failed attempts are stored in `LoginAttempts`. Accounts lock after `LOCKOUT_MAX_ATTEMPTS` failures and unlock automatically after `LOCKOUT_MINUTES`.
 
-**JWT Authentication (default):**
-```json
-POST /api/auth/login
-{
-  "email": "admin@thejourney.com",
-  "password": "Admin@123Secure"
-}
-```
-
-**Session Authentication:**
-```json
-POST /api/auth/login?authType=SESSION
-{
-  "email": "admin@thejourney.com",
-  "password": "Admin@123Secure"
-}
-```
-
-## 📋 Configuration
-
-### Database
-- **Host**: journey.postgres.database.azure.com
-- **User**: journeyDev
-- **Database**: postgres
-- **Status**: ✅ Connected and migrated
-
-### Seeded SuperAdmin
-- **Email**: admin@thejourney.com
-- **Password**: Admin@123Secure
-- **Role**: SuperAdmin
-
-### Environment Variables
-Set these in Cursor workspace secrets or use the startup script:
-- `PG_HOST`, `PG_USER`, `PG_PASSWORD`, `PG_DB`
-- `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`
-- `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
-- `LOCKOUT_MAX_ATTEMPTS` (default: 5)
-- `LOCKOUT_MINUTES` (default: 15)
-
-## 🎯 Features Implemented
-
-### ✅ Ticket Requirements Completed
-
-1. **JWT/Session Authentication** ✅
-   - JWT token-based authentication
-   - Session-based authentication with cookies
-   - Automatic scheme selection (JWT or Session)
-
-2. **RBAC Enforcement** ✅
-   - Role-based authorization policies
-   - SuperAdminOnly policy
-   - AdminAccess policy (Admin + SuperAdmin)
-   - RequireRole policy (any authenticated admin with role)
-
-3. **Failed Login Logging** ✅
-   - All login attempts logged to `LoginAttempts` table
-   - Tracks: email, success/failure, reason, IP address, user agent, timestamp
-   - Audit trail for security monitoring
-
-4. **Account Lockout** ✅
-   - Configurable max attempts (default: 5)
-   - Temporary lockout with expiration
-   - Automatic unlock after lockout period
-
-5. **Role Validation** ✅
-   - No role assigned → Access denied
-   - Role validation on login
-   - Role validation on token generation
-   - Enforced in all authorization policies
-
-### Additional Features
-- ✅ Password hashing with BCrypt
-- ✅ Database migrations with EF Core
-- ✅ SuperAdmin seeding on startup
-- ✅ Swagger UI with authentication support
-- ✅ Protected endpoints with role-based access
-- ✅ Comprehensive error handling
-
-## 📁 Project Structure
-
+## Structure
 ```
 TheJourney.Api/
-├── Infrastructure/
-│   └── Database/
-│       ├── AppDbContext.cs
-│       └── AppDbContextFactory.cs
-├── Modules/
-│   ├── Auth/
-│   │   ├── Controllers/
-│   │   │   └── AuthController.cs
-│   │   ├── Models/
-│   │   │   ├── Admin.cs
-│   │   │   └── LoginAttempt.cs
-│   │   └── Services/
-│   │       └── AuthService.cs
-│   └── Admin/ (placeholder)
-├── Migrations/
-│   ├── 20251105131552_InitialCreate.cs
-│   └── 20251105141239_AddLoginAttempts.cs
-├── Program.cs
-└── start-api.ps1
+├── Infrastructure/Database/    # AppDbContext + factory
+├── Modules/Auth/               # Controllers, services, models
+├── Migrations/                 # EF Core migrations
+├── Program.cs                  # bootstrap + auth configuration
+├── start-api.ps1               # env setup script
+└── test-login.ps1              # sample login test
 ```
 
-## 🔐 API Endpoints
+## Deployment
 
-### POST `/api/auth/login`
-Login with email and password. Supports JWT (default) or Session authentication.
+### Quick Start
+See [AZURE_QUICK_START.md](./AZURE_QUICK_START.md) for a 5-step deployment guide.
 
-**Query Parameters:**
-- `authType` (optional): `JWT` or `SESSION` (default: `JWT`)
+### Full Deployment Guide
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete step-by-step instructions to deploy to Azure App Service using Azure DevOps.
 
-**Request:**
-```json
-{
-  "email": "admin@thejourney.com",
-  "password": "Admin@123Secure"
-}
-```
+### Deployment Files
+- `azure-pipelines.yml` - Azure DevOps CI/CD pipeline configuration
+- `appsettings.Production.json` - Production configuration settings
 
-**Response (JWT):**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "message": "Login successful"
-}
-```
-
-**Response (Session):**
-```json
-{
-  "sessionId": "guid-here",
-  "message": "Login successful"
-}
-```
-
-### POST `/api/auth/logout`
-Logout and clear session (requires authentication).
-
-### GET `/api/auth/protected`
-Protected endpoint requiring authentication and a valid role.
-
-**Headers (JWT):**
-```
-Authorization: Bearer <your-jwt-token>
-```
-
-**Headers (Session):**
-```
-Cookie: TheJourney.Session=<session-cookie>
-```
-
-### GET `/api/auth/superadmin-only`
-Protected endpoint accessible only to SuperAdmin users.
-
-### GET `/api/auth/admin-access`
-Protected endpoint accessible to Admin and SuperAdmin users.
-
-## 🔍 Failed Login Logging
-
-All login attempts are logged to the `LoginAttempts` table:
-
-**Query failed attempts:**
-```sql
-SELECT * FROM "LoginAttempts" 
-WHERE "IsSuccess" = false 
-ORDER BY "AttemptedAt" DESC;
-```
-
-**Query all attempts for a user:**
-```sql
-SELECT * FROM "LoginAttempts" 
-WHERE "Email" = 'admin@thejourney.com' 
-ORDER BY "AttemptedAt" DESC;
-```
-
-## 🛡️ Security Features
-
-- **Password Hashing**: BCrypt with automatic salt
-- **JWT Tokens**: Secure token-based authentication with role claims
-- **Session Authentication**: Cookie-based sessions with secure flags
-- **Account Lockout**: Configurable lockout after failed attempts
-- **Role Validation**: No role = No access (enforced)
-- **Audit Logging**: All login attempts logged with IP and user agent
-- **SSL/TLS**: Secure database connections
-- **Environment Variables**: All secrets stored in environment, never in code
-
-## 🔧 Development
-
-### Run Migrations
-```bash
-dotnet ef database update
-```
-
-### Build
-```bash
-dotnet build
-```
-
-### Start API
-```powershell
-.\start-api.ps1
-```
-
-## 📝 Database Tables
-
-### Admins
-- `Id`, `Email`, `PasswordHash`, `Role`
-- `FailedLoginAttempts`, `IsLocked`, `LockUntil`
-- `CreatedAt`
-
-### LoginAttempts
-- `Id`, `Email`, `IsSuccess`, `FailureReason`
-- `IpAddress`, `UserAgent`, `AttemptedAt`
-- `AdminId` (foreign key to Admins)
-
-## 🎉 Ready to Use!
-
-Everything is configured and ready. Simply run `.\start-api.ps1` and start testing!
+## Dev Notes
+- Keep secrets out of source control; rely on environment variables or secret managers.
+- Update migrations with `dotnet ef migrations add <Name>` and run `dotnet ef database update`.
+- Adjust seeding logic if multiple environments need different admin accounts.
+- CORS is configured for mobile apps - set `CORS_ALLOWED_ORIGINS` environment variable in production.
