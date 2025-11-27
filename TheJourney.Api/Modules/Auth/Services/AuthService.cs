@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TheJourney.Api.Infrastructure.Database;
-using TheJourney.Api.Modules.Auth.Models;
+using TheJourney.Api.Modules.Admin.Auth.Models;
 
 namespace TheJourney.Api.Modules.Auth.Services;
 
