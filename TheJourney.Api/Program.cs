@@ -141,8 +141,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
+    // Get current request URL or use environment variable
     var apiBaseUrl = Environment.GetEnvironmentVariable("API_BASE_URL") 
-        ?? "https://thejourney-api-dev-b0hscbf3eqchhsak.centralus-01.azurewebsites.net";
+        ?? "http://4.236.186.123:5000";
     
     c.SwaggerDoc("v1", new OpenApiInfo 
     { 
@@ -155,7 +156,7 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
     
-    // Add production server URL
+    // Add server URL (use HTTP for VM deployment)
     c.AddServer(new OpenApiServer
     {
         Url = apiBaseUrl,
@@ -185,6 +186,10 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+    
+    // Ignore errors in Swagger generation to prevent crashes
+    c.IgnoreObsoleteActions();
+    c.IgnoreObsoleteProperties();
 });
 
 var app = builder.Build();
@@ -194,8 +199,15 @@ var app = builder.Build();
 var enableSwagger = Environment.GetEnvironmentVariable("ENABLE_SWAGGER") != "false";
 if (enableSwagger || app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "TheJourney API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 
 app.UseCors("AllowMobileApps");
