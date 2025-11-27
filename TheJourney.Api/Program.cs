@@ -1,3 +1,11 @@
+// ============================================================================
+// TheJourney API - Main Entry Point
+// ============================================================================
+// This file configures and starts the ASP.NET Core Web API application.
+// It sets up database connections, authentication, authorization, services,
+// middleware, and Swagger documentation.
+// ============================================================================
+
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.Cookies;
