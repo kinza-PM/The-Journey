@@ -1,6 +1,8 @@
 # Deploy TheJourney API to Azure VM
 
-This guide helps you deploy the latest code from GitHub to your Azure VM.
+This guide helps you deploy the latest code from **Azure DevOps Repos** to your Azure VM.
+
+**Repository:** https://dev.azure.com/journey-devops/JourneyApp/_git/The-Journey.git
 
 ## Prerequisites
 
@@ -22,15 +24,42 @@ ssh thejourneyapi@4.236.186.123
 cd ~/The-Journey
 ```
 
-## Step 3: Pull Latest Code from GitHub
+## Step 3: Pull Latest Code from Azure DevOps
+
+**If this is the first time setting up on VM:**
 
 ```bash
-# Pull latest changes
+# Clone the repository from Azure DevOps
+cd ~
+git clone https://dev.azure.com/journey-devops/JourneyApp/_git/The-Journey.git
+cd The-Journey
+```
+
+**If repository already exists on VM:**
+
+```bash
+# Pull latest changes from Azure DevOps
 git pull origin main
 
-# If you need to reset to match GitHub exactly:
+# If you need to reset to match Azure DevOps exactly:
 # git fetch origin
 # git reset --hard origin/main
+```
+
+**If VM is still pointing to GitHub, update the remote:**
+
+```bash
+# Check current remote
+git remote -v
+
+# Change to Azure DevOps
+git remote set-url origin https://dev.azure.com/journey-devops/JourneyApp/_git/The-Journey.git
+
+# Verify
+git remote -v
+
+# Pull latest code
+git pull origin main
 ```
 
 ## Step 4: Set Environment Variables
