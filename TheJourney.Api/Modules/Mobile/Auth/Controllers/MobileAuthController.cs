@@ -20,15 +20,25 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.SignupAsync(new SignupRequest(dto.Email, dto.Password, dto.FullName));
         if (!result.Success)
         {
-            return BadRequest(new { message = result.Message });
+            return BadRequest(new
+            {
+                status = 400,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new
+        return StatusCode(201, new
         {
-            message = result.Message,
-            verificationRequired = result.VerificationRequired,
-            expiresInSeconds = result.ExpiresInSeconds,
-            code = result.DebugCode
+            status = 201,
+            message = "success",
+            data = new
+            {
+                message = result.Message,
+                verificationRequired = result.VerificationRequired,
+                expiresInSeconds = result.ExpiresInSeconds,
+                code = result.DebugCode
+            }
         });
     }
 
@@ -38,10 +48,20 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.VerifyAsync(new VerificationRequest(dto.Email, dto.Code));
         if (!result.Success)
         {
-            return BadRequest(new { message = result.Message });
+            return BadRequest(new
+            {
+                status = 400,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new { message = result.Message });
+        return Ok(new
+        {
+            status = 200,
+            message = "success",
+            data = new { message = result.Message }
+        });
     }
 
     [HttpPost("resend-otp")]
@@ -50,14 +70,25 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.ResendAsync(new ResendRequest(dto.Email));
         if (!result.Success)
         {
-            return BadRequest(new { message = result.Message });
+            return BadRequest(new
+            {
+                status = 400,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new
+        return StatusCode(201, new
         {
-            message = result.Message,
-            expiresInSeconds = result.ExpiresInSeconds,
-            code = result.DebugCode
+            status = 201,
+            message = "success",
+            data = new
+            {
+                message = result.Message,
+                verificationRequired = true,
+                expiresInSeconds = result.ExpiresInSeconds,
+                code = result.DebugCode
+            }
         });
     }
 
@@ -67,10 +98,25 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.LoginAsync(new LoginRequest(dto.Email, dto.Password));
         if (!result.Success)
         {
-            return Unauthorized(new { message = result.Message });
+            return Unauthorized(new
+            {
+                status = 401,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new { message = result.Message, token = result.Token, expiresAtUtc = result.ExpiresAt });
+        return Ok(new
+        {
+            status = 200,
+            message = "success",
+            data = new
+            {
+                message = result.Message,
+                token = result.Token,
+                expiresAtUtc = result.ExpiresAt
+            }
+        });
     }
 
     [HttpPost("forgot-password")]
@@ -79,10 +125,26 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.RequestPasswordResetAsync(new PasswordResetRequest(dto.Email));
         if (!result.Success)
         {
-            return BadRequest(new { message = result.Message });
+            return BadRequest(new
+            {
+                status = 400,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new { message = result.Message, code = result.DebugCode, expiresInSeconds = result.ExpiresInSeconds });
+        return StatusCode(201, new
+        {
+            status = 201,
+            message = "success",
+            data = new
+            {
+                message = result.Message,
+                verificationRequired = true,
+                expiresInSeconds = result.ExpiresInSeconds,
+                code = result.DebugCode
+            }
+        });
     }
 
     [HttpPost("reset-password")]
@@ -91,10 +153,20 @@ public class MobileAuthController : ControllerBase
         var result = await _mobileAuthService.ResetPasswordAsync(new PasswordResetConfirmRequest(dto.Email, dto.OtpCode, dto.NewPassword, dto.ConfirmPassword));
         if (!result.Success)
         {
-            return BadRequest(new { message = result.Message });
+            return BadRequest(new
+            {
+                status = 400,
+                message = "error",
+                data = new { message = result.Message }
+            });
         }
 
-        return Ok(new { message = result.Message });
+        return Ok(new
+        {
+            status = 200,
+            message = "success",
+            data = new { message = result.Message }
+        });
     }
 }
 

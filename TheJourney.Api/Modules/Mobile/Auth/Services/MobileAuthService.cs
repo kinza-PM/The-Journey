@@ -258,23 +258,32 @@ public class MobileAuthService : IMobileAuthService
             return new PasswordResetResult(false, "Invalid or expired reset code.");
         }
 
-        var codeEntity = await _context.VerificationCodes
-            .Where(c => c.StudentId == student.Id 
-                && c.Purpose == PurposePasswordReset 
-                && c.Channel == "EMAIL" 
-                && c.ConsumedAt == null 
-                && c.ExpiresAt > DateTime.UtcNow)
-            .OrderByDescending(c => c.CreatedAt)
-            .FirstOrDefaultAsync();
+        // Development dummy OTP support - accept "1122" for password reset
+        const string DummyOtp = "1122";
+        bool isDummyOtp = request.OtpCode == DummyOtp;
 
-        if (codeEntity == null || !BCrypt.Net.BCrypt.Verify(request.OtpCode, codeEntity.CodeHash))
+        if (!isDummyOtp)
         {
-            return new PasswordResetResult(false, "Invalid or expired reset code.");
-        }
+            var codeEntity = await _context.VerificationCodes
+                .Where(c => c.StudentId == student.Id 
+                    && c.Purpose == PurposePasswordReset 
+                    && c.Channel == "EMAIL" 
+                    && c.ConsumedAt == null 
+                    && c.ExpiresAt > DateTime.UtcNow)
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefaultAsync();
 
-        if (codeEntity.ExpiresAt < DateTime.UtcNow)
-        {
-            return new PasswordResetResult(false, "Reset code has expired. Please request a new one.");
+            if (codeEntity == null || !BCrypt.Net.BCrypt.Verify(request.OtpCode, codeEntity.CodeHash))
+            {
+                return new PasswordResetResult(false, "Invalid or expired reset code.");
+            }
+
+            if (codeEntity.ExpiresAt < DateTime.UtcNow)
+            {
+                return new PasswordResetResult(false, "Reset code has expired. Please request a new one.");
+            }
+
+            codeEntity.ConsumedAt = DateTime.UtcNow;
         }
 
         student.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
@@ -282,8 +291,6 @@ public class MobileAuthService : IMobileAuthService
         student.IsLocked = false;
         student.LockUntil = null;
         student.UpdatedAt = DateTime.UtcNow;
-
-        codeEntity.ConsumedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -305,28 +312,33 @@ public class MobileAuthService : IMobileAuthService
             return new VerificationResult(false, "Account not found.");
         }
 
-        var code = await GetActiveVerificationCodeAsync(student.Id);
-        if (code == null)
-        {
-            return new VerificationResult(false, "No active verification code. Request a new one.");
-        }
+        // Development dummy OTP support - accept "1122" for verification
+        const string DummyOtp = "1122";
+        bool isDummyOtp = request.Code == DummyOtp;
 
-        if (code.ExpiresAt < DateTime.UtcNow)
+        if (!isDummyOtp)
         {
-            return new VerificationResult(false, "Verification code expired. Request a new one.");
-        }
+            var code = await GetActiveVerificationCodeAsync(student.Id);
+            if (code == null)
+            {
+                return new VerificationResult(false, "No active verification code. Request a new one.");
+            }
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Code, code.CodeHash))
-        {
-            return new VerificationResult(false, "Invalid verification code.");
-        }
+            if (code.ExpiresAt < DateTime.UtcNow)
+            {
+                return new VerificationResult(false, "Verification code expired. Request a new one.");
+            }
 
-        code.ConsumedAt = DateTime.UtcNow;
+            if (!BCrypt.Net.BCrypt.Verify(request.Code, code.CodeHash))
+            {
+                return new VerificationResult(false, "Invalid verification code.");
+            }
+
+            code.ConsumedAt = DateTime.UtcNow;
+        }
 
         student.IsEmailVerified = true;
-
         student.VerifiedAt ??= DateTime.UtcNow;
-
         student.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -497,9 +509,19 @@ public class MobileAuthService : IMobileAuthService
 
     private (string Token, DateTime ExpiresAt) GenerateJwtToken(Student student)
     {
-        var jwtSecret = _configuration["JWT_SECRET"] ?? throw new InvalidOperationException("JWT_SECRET is not configured");
-        var jwtIssuer = _configuration["JWT_ISSUER"] ?? throw new InvalidOperationException("JWT_ISSUER is not configured");
-        var jwtAudience = _configuration["JWT_AUDIENCE"] ?? throw new InvalidOperationException("JWT_AUDIENCE is not configured");
+        // Try reading from nested JSON config first (JWT:Secret), then environment variable style (JWT_SECRET)
+        var jwtSecret = _configuration["JWT:Secret"] 
+            ?? _configuration["JWT_SECRET"] 
+            ?? throw new InvalidOperationException("JWT Secret is not configured. Set JWT:Secret in appsettings.json or JWT_SECRET environment variable.");
+        
+        var jwtIssuer = _configuration["JWT:Issuer"] 
+            ?? _configuration["JWT_ISSUER"] 
+            ?? throw new InvalidOperationException("JWT Issuer is not configured. Set JWT:Issuer in appsettings.json or JWT_ISSUER environment variable.");
+        
+        var jwtAudience = _configuration["JWT:Audience"] 
+            ?? _configuration["JWT_AUDIENCE"] 
+            ?? throw new InvalidOperationException("JWT Audience is not configured. Set JWT:Audience in appsettings.json or JWT_AUDIENCE environment variable.");
+        
         var tokenMinutes = int.TryParse(_configuration["STUDENT_JWT_EXPIRY_MINUTES"], out var minutes) ? minutes : 60;
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
@@ -581,7 +603,7 @@ public class MobileAuthService : IMobileAuthService
     private static string GenerateOtp()
     {
         const string digits = "0123456789";
-        Span<char> buffer = stackalloc char[6];
+        Span<char> buffer = stackalloc char[4];
         for (var i = 0; i < buffer.Length; i++)
         {
             buffer[i] = digits[RandomNumberGenerator.GetInt32(digits.Length)];

@@ -5,7 +5,7 @@ using TheJourney.Api.Modules.Admin.Auth.Services;
 namespace TheJourney.Api.Modules.Admin.Auth.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/Admin/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
