@@ -10,9 +10,9 @@ using TheJourney.Api.Infrastructure.Database;
 using TheJourney.Api.Modules.Admin.Auth.Models;
 using TheJourney.Api.Modules.Admin.Auth.Services;
 using TheJourney.Api.Modules.Admin.CareerFramework.Services;
-using TheJourney.Api.Modules.Mobile.Assessment.Services;
 using TheJourney.Api.Modules.Mobile.Auth.Notifications;
 using TheJourney.Api.Modules.Mobile.Auth.Services;
+using TheJourney.Api.Modules.Mobile.Assessment.Services;
 using TheJourney.Api.Modules.Mobile.Profile.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -146,7 +146,7 @@ builder.Services.AddSwaggerGen(c =>
     var isDevelopment = builder.Environment.IsDevelopment();
     
     // In development, always use localhost:5097 (matches launchSettings.json)
-    // In production, use the configured API base URL
+    // In production, use the configured API base URL or environment variable
     var defaultServerUrl = isDevelopment 
         ? "http://localhost:5097" 
         : (builder.Configuration["API:BaseUrl"] 
@@ -171,7 +171,7 @@ builder.Services.AddSwaggerGen(c =>
         Description = isDevelopment ? "Local Development Server (Port 5097)" : "Production Server"
     });
     
-    // In development, also add production server as an option if configured
+    // In production, also add production server as an option if configured differently
     if (!isDevelopment)
     {
         var productionUrl = builder.Configuration["API:BaseUrl"] ?? Environment.GetEnvironmentVariable("API_BASE_URL");
@@ -218,6 +218,10 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+    
+    // Ignore errors in Swagger generation to prevent crashes
+    c.IgnoreObsoleteActions();
+    c.IgnoreObsoleteProperties();
 });
 
 var app = builder.Build();
@@ -230,6 +234,7 @@ var enableSwagger = swaggerConfig == null
     : bool.Parse(swaggerConfig);
 if (enableSwagger || app.Environment.IsDevelopment())
 {
+<<<<<<< HEAD
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
@@ -238,6 +243,16 @@ if (enableSwagger || app.Environment.IsDevelopment())
         {
             c.ConfigObject.PersistAuthorization = false;
         }
+=======
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "TheJourney API v1");
+        c.RoutePrefix = "swagger";
+>>>>>>> a8d7b6aaec4817dd2d3adeaa9f9d6b5f7ba87777
     });
 }
 

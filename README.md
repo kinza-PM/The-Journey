@@ -87,7 +87,20 @@ TheJourney.Api/
 └── test-login.ps1              # sample login test
 ```
 
+## Deployment
+
+### Quick Start
+See [AZURE_QUICK_START.md](./AZURE_QUICK_START.md) for a 5-step deployment guide.
+
+### Full Deployment Guide
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete step-by-step instructions to deploy to Azure App Service using Azure DevOps.
+
+### Deployment Files
+- `azure-pipelines.yml` - Azure DevOps CI/CD pipeline configuration
+- `appsettings.Production.json` - Production configuration settings
+
 ## Dev Notes
 - Keep secrets out of source control; rely on environment variables or secret managers.
 - Update migrations with `dotnet ef migrations add <Name>` and run `dotnet ef database update`.
 - Adjust seeding logic if multiple environments need different admin accounts.
+- CORS is configured for mobile apps - set `CORS_ALLOWED_ORIGINS` environment variable in production.
