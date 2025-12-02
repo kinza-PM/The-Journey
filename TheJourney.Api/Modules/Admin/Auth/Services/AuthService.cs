@@ -6,9 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TheJourney.Api.Infrastructure.Database;
-using TheJourney.Api.Modules.Auth.Models;
+using TheJourney.Api.Modules.Admin.Auth.Models;
 
-namespace TheJourney.Api.Modules.Auth.Services;
+namespace TheJourney.Api.Modules.Admin.Auth.Services;
 
 public interface IAuthService
 {
@@ -123,8 +123,13 @@ public class AuthService : IAuthService
         
         string? token = null;
         string? sessionId = null;
+        var adminId = admin.Id;
+
+        var normalizedAuthType = string.IsNullOrWhiteSpace(authType)
+            ? "JWT"
+            : authType.Trim().ToUpperInvariant();
         
-        if (authType.ToUpper() == "SESSION")
+        if (normalizedAuthType == "SESSION")
         {
             sessionId = Guid.NewGuid().ToString();
             if (httpContext != null && admin != null)
@@ -158,7 +163,7 @@ public class AuthService : IAuthService
             token = GenerateJwtToken(admin);
         }
         
-        await LogLoginAttemptAsync(email, true, null, admin.Id, httpContext);
+        await LogLoginAttemptAsync(email, true, null, adminId, httpContext);
         
         return new LoginResult
         {
@@ -190,7 +195,7 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
     }
     
-    private string GenerateJwtToken(Admin admin)
+    private string GenerateJwtToken(global::TheJourney.Api.Modules.Admin.Auth.Models.Admin admin)
     {
         if (string.IsNullOrWhiteSpace(admin.Role))
         {

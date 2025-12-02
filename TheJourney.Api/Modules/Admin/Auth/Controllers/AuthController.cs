@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TheJourney.Api.Modules.Auth.Services;
+using TheJourney.Api.Modules.Admin.Auth.Services;
 
-namespace TheJourney.Api.Modules.Auth.Controllers;
+namespace TheJourney.Api.Modules.Admin.Auth.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/Admin/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -23,19 +23,23 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Email and password are required" });
         }
         
-        if (authType != null && authType.ToUpper() != "JWT" && authType.ToUpper() != "SESSION")
+        var normalizedAuthType = string.IsNullOrWhiteSpace(authType)
+            ? "JWT"
+            : authType.Trim().ToUpperInvariant();
+        
+        if (normalizedAuthType != "JWT" && normalizedAuthType != "SESSION")
         {
             return BadRequest(new { message = "authType must be either 'JWT' or 'SESSION'" });
         }
         
-        var result = await _authService.LoginAsync(request.Email, request.Password, HttpContext, authType ?? "JWT");
+        var result = await _authService.LoginAsync(request.Email, request.Password, HttpContext, normalizedAuthType);
         
         if (!result.Success)
         {
             return Unauthorized(new { message = result.Message });
         }
         
-        if (authType?.ToUpper() == "SESSION")
+        if (normalizedAuthType == "SESSION")
         {
             return Ok(new { sessionId = result.SessionId, message = result.Message });
         }

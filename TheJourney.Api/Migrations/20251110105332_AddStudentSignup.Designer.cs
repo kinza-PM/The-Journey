@@ -12,8 +12,8 @@ using TheJourney.Api.Infrastructure.Database;
 namespace TheJourney.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251105141239_AddLoginAttempts")]
-    partial class AddLoginAttempts
+    [Migration("20251110105332_AddStudentSignup")]
+    partial class AddStudentSignup
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -112,6 +112,106 @@ namespace TheJourney.Api.Migrations
                     b.ToTable("LoginAttempts");
                 });
 
+            modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Auth.Models.Student", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<bool>("IsEmailVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPhoneVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("\"Email\" IS NOT NULL");
+
+                    b.HasIndex("PhoneNumber")
+                        .IsUnique()
+                        .HasFilter("\"PhoneNumber\" IS NOT NULL");
+
+                    b.ToTable("Students");
+                });
+
+            modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Auth.Models.VerificationCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryTarget")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId", "Purpose");
+
+                    b.HasIndex("StudentId", "Channel", "Purpose");
+
+                    b.ToTable("VerificationCodes");
+                });
+
             modelBuilder.Entity("TheJourney.Api.Modules.Admin.Auth.Models.LoginAttempt", b =>
                 {
                     b.HasOne("TheJourney.Api.Modules.Admin.Auth.Models.Admin", "Admin")
@@ -120,6 +220,17 @@ namespace TheJourney.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Admin");
+                });
+
+            modelBuilder.Entity("TheJourney.Api.Modules.Mobile.Auth.Models.VerificationCode", b =>
+                {
+                    b.HasOne("TheJourney.Api.Modules.Mobile.Auth.Models.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
                 });
 #pragma warning restore 612, 618
         }

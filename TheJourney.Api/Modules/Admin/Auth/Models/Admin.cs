@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace TheJourney.Api.Modules.Auth.Models;
+namespace TheJourney.Api.Modules.Admin.Auth.Models;
 
 public class Admin
 {
