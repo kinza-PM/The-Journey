@@ -145,13 +145,17 @@ builder.Services.AddSwaggerGen(c =>
 {
     var isDevelopment = builder.Environment.IsDevelopment();
     
-    // In development, always use localhost:5097 (matches launchSettings.json)
-    // In production, use the configured API base URL, environment variable, or Azure Web App URL as fallback
-    var defaultServerUrl = isDevelopment 
-        ? "http://localhost:5097" 
-        : (builder.Configuration["API:BaseUrl"] 
-            ?? Environment.GetEnvironmentVariable("API_BASE_URL") 
-            ?? "https://thejourney-api-dev-b0hscbf3eqchhsak.centralus-01.azurewebsites.net");
+    // Prioritize API_BASE_URL environment variable if set (for VM/production deployments)
+    // Otherwise, in development use localhost:5097 (matches launchSettings.json)
+    // In production, use the configured API base URL or Azure Web App URL as fallback
+    var apiBaseUrl = Environment.GetEnvironmentVariable("API_BASE_URL") 
+        ?? builder.Configuration["API:BaseUrl"];
+    
+    var defaultServerUrl = !string.IsNullOrEmpty(apiBaseUrl)
+        ? apiBaseUrl
+        : (isDevelopment 
+            ? "http://localhost:5097" 
+            : "https://thejourney-api-dev-b0hscbf3eqchhsak.centralus-01.azurewebsites.net");
     
     c.SwaggerDoc("v1", new OpenApiInfo 
     { 
