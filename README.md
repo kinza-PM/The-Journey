@@ -1,6 +1,6 @@
 # TheJourney API – Admin Authentication
 
-.NET 8 Web API providing admin login, JWT and session authentication, role-based access control, and login audit logging backed by PostgreSQL.
+A professional .NET 8 Web API with PostgreSQL, JWT and Session authentication, Role-Based Access Control (RBAC), and comprehensive audit logging. Provides admin login, JWT and session authentication, role-based access control, and login audit logging backed by PostgreSQL.
 
 ## Tech Stack
 - ASP.NET Core 8
