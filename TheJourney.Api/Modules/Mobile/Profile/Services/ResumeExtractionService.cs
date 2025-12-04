@@ -70,6 +70,7 @@ public class ResumeExtractionService : IResumeExtractionService
 
         text = NormalizeText(text);
 
+        result.PersonalInfo = ExtractPersonalInfo(text);
         result.Educations = ExtractEducations(text);
         result.Skills = ExtractSkills(text);
         result.Experiences = ExtractExperiences(text);
@@ -145,22 +146,115 @@ public class ResumeExtractionService : IResumeExtractionService
         return text;
     }
     
+    private PersonalInfoData ExtractPersonalInfo(string text)
+    {
+        var personalInfo = new PersonalInfoData();
+        
+        // Personal info is usually at the top of the CV (first 500 characters)
+        var topSection = text.Length > 500 ? text.Substring(0, 500) : text;
+        
+        // Extract Name (usually the first line or first capitalized text)
+        var namePattern = @"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})";
+        var nameMatch = Regex.Match(topSection, namePattern, RegexOptions.Multiline);
+        if (nameMatch.Success)
+        {
+            personalInfo.FullName = nameMatch.Groups[1].Value.Trim();
+        }
+        
+        // Extract Email
+        var emailPattern = @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b";
+        var emailMatch = Regex.Match(text, emailPattern);
+        if (emailMatch.Success)
+        {
+            personalInfo.Email = emailMatch.Value.Trim();
+        }
+        
+        // Extract Phone (various formats)
+        var phonePatterns = new[]
+        {
+            @"\+?\d{1,4}?[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}", // International or formatted
+            @"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", // US format
+            @"\d{10,15}" // Simple 10-15 digit number
+        };
+        
+        foreach (var pattern in phonePatterns)
+        {
+            var phoneMatch = Regex.Match(topSection, pattern);
+            if (phoneMatch.Success && phoneMatch.Value.Replace(" ", "").Replace("-", "").Replace(".", "").Replace("(", "").Replace(")", "").Length >= 10)
+            {
+                personalInfo.Phone = phoneMatch.Value.Trim();
+                break;
+            }
+        }
+        
+        // Extract Address (look for city, state, country patterns)
+        var addressPatterns = new[]
+        {
+            @"(?i)(?:address|location|residence)[\s:]+([^\n]+)", // After "Address:" or "Location:"
+            @"([A-Z][a-z]+,\s*[A-Z]{2,}\s*\d{5})", // City, State ZIP
+            @"([A-Z][a-z]+,\s*[A-Z][a-z]+(?:,\s*[A-Z][a-z]+)?)", // City, State, Country
+            @"(\d+\s+[A-Za-z\s]+,\s*[A-Z][a-z]+,\s*[A-Z]{2,})" // Street, City, State
+        };
+        
+        foreach (var pattern in addressPatterns)
+        {
+            var addressMatch = Regex.Match(topSection, pattern);
+            if (addressMatch.Success)
+            {
+                personalInfo.Address = addressMatch.Groups[1].Value.Trim();
+                if (personalInfo.Address.Length > 10) // Ensure it's substantial
+                {
+                    break;
+                }
+            }
+        }
+        
+        // Extract Summary/Professional Summary/Objective (usually after contact info, before experience/education)
+        var summaryPatterns = new[]
+        {
+            @"(?i)(?:professional\s+)?(?:summary|profile|objective|about\s+me|introduction|career\s+summary|career\s+objective)[\s:]*\n\s*([^\n]+(?:\n(?!\s*(?:experience|education|skills|projects|certifications?|languages?|work|employment)\b)[^\n]+)*)",
+            @"(?i)(?:professional\s+)?(?:summary|profile|objective|about)[\s:]+([^•\n]{50,500}?)(?=\n\s*(?:experience|education|skills|projects|certifications?|languages?|work|employment|$))"
+        };
+        
+        foreach (var pattern in summaryPatterns)
+        {
+            var summaryMatch = Regex.Match(text, pattern, RegexOptions.Multiline);
+            if (summaryMatch.Success)
+            {
+                var summary = summaryMatch.Groups[1].Value.Trim();
+                
+                // Clean up the summary
+                summary = Regex.Replace(summary, @"\s+", " "); // Normalize whitespace
+                summary = summary.Trim();
+                
+                // Ensure it's substantial (at least 20 chars and not too long)
+                if (summary.Length >= 20 && summary.Length <= 2000)
+                {
+                    personalInfo.Summary = summary;
+                    break;
+                }
+            }
+        }
+        
+        return personalInfo;
+    }
+
     private List<EducationData> ExtractEducations(string text)
     {
         var educations = new List<EducationData>();
         
-        // Look for education section
+        // Look for education section with more variations
         var educationPatterns = new[]
         {
-            @"(?i)(?:education|academic|qualification|degree|university|college|school)[\s\S]*?(?=(?:experience|work|employment|skills|projects|language|$))",
-            @"(?i)(?:bachelor|master|phd|doctorate|diploma|certificate)[\s\S]*?(?=(?:experience|work|employment|skills|projects|language|$))"
+            @"(?i)(?:education|academic\s+(?:background|qualifications?)|qualifications?|degrees?)[\s:]*[\s\S]*?(?=(?:experience|work\s+experience|professional|employment|skills?|technical|projects?|certifications?|languages?|volunteer|references?|$))",
+            @"(?i)(?:bachelor|master|phd|doctorate|diploma|certificate|b\.?s\.?|m\.?s\.?|b\.?a\.?|m\.?a\.?)[\s\S]*?(?=(?:experience|work|employment|skills|projects|language|references|$))"
         };
         
         string? educationSection = null;
         foreach (var pattern in educationPatterns)
         {
             var match = Regex.Match(text, pattern);
-            if (match.Success)
+            if (match.Success && match.Value.Length > 20) // Ensure we have substantial content
             {
                 educationSection = match.Value;
                 break;
@@ -172,60 +266,152 @@ public class ResumeExtractionService : IResumeExtractionService
             return educations;
         }
         
-        // Extract individual education entries
-        // Pattern for degree/institution/date
-        var educationEntryPattern = @"(?i)(?:^|\n)\s*([A-Z][^•\n]{10,100}?)\s*(?:[-–—]\s*)?([A-Z][^•\n]{10,100}?)?\s*(?:[-–—]\s*)?(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4})\s*(?:[-–—]\s*)?(?:present|current|(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4}))?";
+        // Parse line by line to extract multiple education entries
+        var lines = educationSection.Split('\n');
+        EducationData? currentEducation = null;
+        var linesBuffer = new List<string>(); // Buffer to collect related lines
         
-        var matches = Regex.Matches(educationSection, educationEntryPattern, RegexOptions.Multiline);
-        
-        foreach (Match match in matches)
+        for (int i = 0; i < lines.Length; i++)
         {
-            var education = new EducationData();
-            
-            // Try to identify degree and institution
-            var fullText = match.Groups[0].Value.Trim();
-            
-            // Look for degree keywords
-            var degreeKeywords = new[] { "Bachelor", "Master", "PhD", "Doctorate", "Diploma", "Certificate", "BSc", "MSc", "BA", "MA", "BS", "MS" };
-            foreach (var keyword in degreeKeywords)
+            var line = lines[i].Trim();
+            if (string.IsNullOrWhiteSpace(line)) 
             {
-                if (fullText.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                // Empty line likely indicates end of current entry
+                if (linesBuffer.Count > 0 && currentEducation != null)
                 {
-                    education.Degree = ExtractDegree(fullText);
-                    break;
+                    ProcessEducationBuffer(linesBuffer, currentEducation);
+                    
+                    // Save if we have meaningful data
+                    if (!string.IsNullOrWhiteSpace(currentEducation.Degree) || 
+                        !string.IsNullOrWhiteSpace(currentEducation.Institution))
+                    {
+                        educations.Add(currentEducation);
+                        currentEducation = null; // Reset for next entry
+                        linesBuffer.Clear();
+                    }
                 }
+                continue;
             }
             
-            // Extract institution (usually first part or after degree)
-            education.Institution = ExtractInstitution(fullText, education.Degree);
+            // Skip section header line
+            if (Regex.IsMatch(line, @"(?i)^\s*(?:education|academic|qualification|degrees?)\s*:?\s*$"))
+                continue;
             
-            // Extract dates
-            var datePattern = @"(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4})";
-            var dateMatches = Regex.Matches(fullText, datePattern);
-            if (dateMatches.Count > 0)
+            // Check patterns that indicate a NEW education entry
+            var hasDegreeKeyword = Regex.IsMatch(line, @"(?i)\b(bachelor|master|phd|doctorate|diploma|certificate|b\.?s\.?c?\.?|m\.?s\.?c?\.?|b\.?a\.?|m\.?a\.?|degree)\b");
+            var hasUniversityKeyword = Regex.IsMatch(line, @"(?i)\b(university|college|institute|school|academy)\b");
+            var startsWithCapital = line.Length > 0 && char.IsUpper(line[0]) && line.Length > 10;
+            var hasYearPattern = Regex.IsMatch(line, @"\b\d{4}\b");
+            var hasYearRange = Regex.IsMatch(line, @"\d{4}\s*[-–—]\s*\d{4}|\d{4}\s*[-–—to]\s*(?:present|current)|\d{4}\s+to\s+\d{4}", RegexOptions.IgnoreCase);
+            var hasBulletOrNumber = Regex.IsMatch(line, @"^[\d•\-\*]+[\.\)\s]");
+            
+            // Detect if this is a NEW entry (vs continuation of current entry)
+            bool isNewEntry = false;
+            
+            // Strategy: Be aggressive about detecting new entries
+            // Most CVs either use bullet points, empty lines, or clear patterns to separate entries
+            
+            // 1. Has degree keyword - ALWAYS starts new entry
+            if (hasDegreeKeyword && currentEducation != null && linesBuffer.Count > 0)
             {
-                education.StartDate = dateMatches[0].Value;
-                if (dateMatches.Count > 1)
+                // We have existing data and found a degree keyword
+                isNewEntry = true;
+            }
+            else if (hasDegreeKeyword && currentEducation == null)
+            {
+                // First entry with degree
+                isNewEntry = true;
+            }
+            // 2. First entry - any reasonable start
+            else if (currentEducation == null && (hasUniversityKeyword || startsWithCapital || hasBulletOrNumber))
+            {
+                isNewEntry = true;
+            }
+            // 3. University keyword AND we have collected data (likely 2nd entry starting with university name)
+            else if (hasUniversityKeyword && currentEducation != null && linesBuffer.Count >= 2)
+            {
+                // Already have 2+ lines buffered, new university = new entry
+                ProcessEducationBuffer(linesBuffer, currentEducation);
+                if (!string.IsNullOrWhiteSpace(currentEducation.Degree) || 
+                    !string.IsNullOrWhiteSpace(currentEducation.Institution))
                 {
-                    education.EndDate = dateMatches[1].Value;
-                }
-                else if (fullText.Contains("present", StringComparison.OrdinalIgnoreCase) || 
-                         fullText.Contains("current", StringComparison.OrdinalIgnoreCase))
-                {
-                    education.IsCurrent = true;
+                    isNewEntry = true;
                 }
             }
-            
-            // Extract field of study (often after degree or in parentheses)
-            var fieldMatch = Regex.Match(fullText, @"(?:in|of)\s+([A-Z][^,•\n]{5,50})|\(([^)]+)\)");
-            if (fieldMatch.Success)
+            // 4. Has university AND previous education has both degree and dates (complete entry)
+            else if (hasUniversityKeyword && currentEducation != null)
             {
-                education.FieldOfStudy = fieldMatch.Groups[1].Success ? fieldMatch.Groups[1].Value : fieldMatch.Groups[2].Value;
+                ProcessEducationBuffer(linesBuffer, currentEducation);
+                if ((!string.IsNullOrWhiteSpace(currentEducation.Degree) || 
+                     !string.IsNullOrWhiteSpace(currentEducation.Institution)) &&
+                    !string.IsNullOrWhiteSpace(currentEducation.StartDate))
+                {
+                    // Previous entry is complete
+                    isNewEntry = true;
+                }
+            }
+            // 5. Year range pattern AND we already have dates (new entry with dates)
+            else if (hasYearRange && currentEducation != null)
+            {
+                ProcessEducationBuffer(linesBuffer, currentEducation);
+                if (!string.IsNullOrWhiteSpace(currentEducation.StartDate))
+                {
+                    // Already have dates, this is a new entry
+                    isNewEntry = true;
+                }
+            }
+            // 6. Bullet point or numbered list item
+            else if (hasBulletOrNumber && currentEducation != null && linesBuffer.Count > 0)
+            {
+                isNewEntry = true;
             }
             
-            if (!string.IsNullOrWhiteSpace(education.Degree) || !string.IsNullOrWhiteSpace(education.Institution))
+            if (isNewEntry)
             {
-                educations.Add(education);
+                // Save previous education if exists
+                if (currentEducation != null && linesBuffer.Count > 0)
+                {
+                    // Make sure it's processed
+                    if (string.IsNullOrWhiteSpace(currentEducation.Degree) && 
+                        string.IsNullOrWhiteSpace(currentEducation.Institution))
+                    {
+                        ProcessEducationBuffer(linesBuffer, currentEducation);
+                    }
+                    
+                    // Save if we have meaningful data
+                    if (!string.IsNullOrWhiteSpace(currentEducation.Degree) || 
+                        !string.IsNullOrWhiteSpace(currentEducation.Institution))
+                    {
+                        educations.Add(currentEducation);
+                    }
+                }
+                
+                // Start new education entry
+                currentEducation = new EducationData();
+                linesBuffer = new List<string> { line };
+            }
+            else if (currentEducation != null)
+            {
+                // Add to current entry's buffer
+                linesBuffer.Add(line);
+            }
+            else
+            {
+                // No current education yet, start one
+                currentEducation = new EducationData();
+                linesBuffer = new List<string> { line };
+            }
+        }
+        
+        // Don't forget the last education entry
+        if (currentEducation != null && linesBuffer.Count > 0)
+        {
+            ProcessEducationBuffer(linesBuffer, currentEducation);
+            
+            if (!string.IsNullOrWhiteSpace(currentEducation.Degree) || 
+                !string.IsNullOrWhiteSpace(currentEducation.Institution))
+            {
+                educations.Add(currentEducation);
             }
         }
         
@@ -236,6 +422,115 @@ public class ResumeExtractionService : IResumeExtractionService
         }
         
         return educations;
+    }
+    
+    private void ProcessEducationBuffer(List<string> lines, EducationData education)
+    {
+        // Combine all lines to extract information
+        var combinedText = string.Join(" ", lines);
+        
+        // Extract degree from all lines
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(education.Degree))
+            {
+                education.Degree = ExtractDegree(line);
+            }
+            
+            if (string.IsNullOrWhiteSpace(education.Institution))
+            {
+                education.Institution = ExtractInstitution(line, education.Degree);
+            }
+        }
+        
+        // Extract field of study from combined text
+        if (string.IsNullOrWhiteSpace(education.FieldOfStudy))
+        {
+            var fieldMatch = Regex.Match(combinedText, @"(?i)(?:in|of|major)\s+([A-Z][^,•\n\d]{3,50})|\(([^)]+)\)|,\s*([A-Z][A-Za-z\s&]{3,50}?)\s*(?:,|\||$)");
+            if (fieldMatch.Success)
+            {
+                education.FieldOfStudy = fieldMatch.Groups[1].Success ? fieldMatch.Groups[1].Value.Trim() : 
+                                        fieldMatch.Groups[2].Success ? fieldMatch.Groups[2].Value.Trim() : 
+                                        fieldMatch.Groups[3].Value.Trim();
+                
+                // Clean up field of study
+                education.FieldOfStudy = Regex.Replace(education.FieldOfStudy, @"(?i)(university|college|institute|from|to|present|current).*$", "").Trim();
+            }
+            else
+            {
+                // Try to find field in separate lines (often second line after degree or institution)
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(education.FieldOfStudy) && 
+                        !Regex.IsMatch(line, @"\d{4}") && // No dates
+                        !Regex.IsMatch(line, @"(?i)(bachelor|master|phd|university|college|institute)") && // Not degree or institution
+                        line.Length > 5 && line.Length < 60)
+                    {
+                        var fieldMatch2 = Regex.Match(line, @"^([A-Z][A-Za-z\s&,]+)");
+                        if (fieldMatch2.Success)
+                        {
+                            education.FieldOfStudy = fieldMatch2.Value.Trim();
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Extract dates from all lines
+        if (string.IsNullOrWhiteSpace(education.StartDate))
+        {
+            var datePattern = @"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{1,2}[/-]\d{4}|\d{4}";
+            
+            foreach (var line in lines)
+            {
+                var dateMatches = Regex.Matches(line, datePattern, RegexOptions.IgnoreCase);
+                
+                if (dateMatches.Count > 0)
+                {
+                    education.StartDate = dateMatches[0].Value;
+                    
+                    if (Regex.IsMatch(line, @"(?i)\b(present|current|ongoing|now)\b"))
+                    {
+                        education.IsCurrent = true;
+                    }
+                    else if (dateMatches.Count > 1)
+                    {
+                        education.EndDate = dateMatches[1].Value;
+                    }
+                    break; // Found dates, no need to continue
+                }
+            }
+        }
+        
+        // Build the formatted description
+        BuildEducationDescription(education);
+    }
+    
+    private void BuildEducationDescription(EducationData education)
+    {
+        var descriptionParts = new List<string>();
+        
+        if (!string.IsNullOrWhiteSpace(education.Degree))
+            descriptionParts.Add(education.Degree);
+        
+        if (!string.IsNullOrWhiteSpace(education.FieldOfStudy))
+            descriptionParts.Add(education.FieldOfStudy);
+        
+        if (!string.IsNullOrWhiteSpace(education.Institution))
+            descriptionParts.Add(education.Institution);
+        
+        if (!string.IsNullOrWhiteSpace(education.StartDate))
+        {
+            var dateRange = education.StartDate;
+            if (education.IsCurrent)
+                dateRange += " - Present";
+            else if (!string.IsNullOrWhiteSpace(education.EndDate))
+                dateRange += " - " + education.EndDate;
+            
+            descriptionParts.Add(dateRange);
+        }
+        
+        education.Description = string.Join(" | ", descriptionParts);
     }
     
     private string? ExtractDegree(string text)
@@ -297,26 +592,45 @@ public class ResumeExtractionService : IResumeExtractionService
         {
             if (line.Length < 10) continue;
             
-            var education = new EducationData();
+            // Skip section headers
+            if (Regex.IsMatch(line, @"(?i)^\s*(?:education|academic|qualification)\s*:?\s*$"))
+                continue;
             
-            // Check if line contains degree keywords
-            if (Regex.IsMatch(line, @"(?i)(bachelor|master|phd|doctorate|diploma|certificate|degree)", RegexOptions.IgnoreCase))
+            // Check if line contains degree keywords or university keywords
+            if (Regex.IsMatch(line, @"(?i)(bachelor|master|phd|doctorate|diploma|certificate|degree|university|college|institute)", RegexOptions.IgnoreCase))
             {
+                var education = new EducationData();
+                
                 education.Degree = ExtractDegree(line);
                 education.Institution = ExtractInstitution(line, education.Degree);
                 
-                var dates = Regex.Matches(line, @"\d{4}");
+                // Extract field of study
+                var fieldMatch = Regex.Match(line, @"(?i)(?:in|of|major)\s+([A-Z][^,•\n\d]{3,50})|\(([^)]+)\)");
+                if (fieldMatch.Success)
+                {
+                    education.FieldOfStudy = fieldMatch.Groups[1].Success ? fieldMatch.Groups[1].Value.Trim() : fieldMatch.Groups[2].Value.Trim();
+                }
+                
+                // Extract dates
+                var dates = Regex.Matches(line, @"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{1,2}[/-]\d{4}|\d{4}", RegexOptions.IgnoreCase);
                 if (dates.Count > 0)
                 {
                     education.StartDate = dates[0].Value;
-                    if (dates.Count > 1)
+                    
+                    if (Regex.IsMatch(line, @"(?i)\b(present|current|ongoing)\b"))
+                    {
+                        education.IsCurrent = true;
+                    }
+                    else if (dates.Count > 1)
                     {
                         education.EndDate = dates[1].Value;
                     }
                 }
                 
+                // Build description
                 if (!string.IsNullOrWhiteSpace(education.Degree) || !string.IsNullOrWhiteSpace(education.Institution))
                 {
+                    BuildEducationDescription(education);
                     educations.Add(education);
                 }
             }
@@ -390,8 +704,8 @@ public class ResumeExtractionService : IResumeExtractionService
     {
         var experiences = new List<ExperienceData>();
         
-        // Look for experience section
-        var experiencePattern = @"(?i)(?:experience|work\s+experience|employment|professional\s+experience|career)[\s\S]*?(?=(?:education|skills|projects|language|$))";
+        // Look for experience section with more variations
+        var experiencePattern = @"(?i)(?:work\s+)?(?:experience|employment|professional\s+experience|career\s+history|work\s+history|employment\s+history)[\s\S]*?(?=(?:education|academic|skills|technical|projects|certifications?|language|volunteer|references|$))";
         var match = Regex.Match(text, experiencePattern);
         
         string? experienceSection = match.Success ? match.Value : null;
@@ -401,49 +715,82 @@ public class ResumeExtractionService : IResumeExtractionService
             return experiences;
         }
         
-        // Extract job entries - look for job titles and companies
-        var jobEntryPattern = @"(?i)(?:^|\n)\s*([A-Z][^•\n]{10,100}?)\s*(?:at|@|-|–|—)\s*([A-Z][^•\n]{10,100}?)?\s*(?:[-–—]\s*)?(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4})\s*(?:[-–—]\s*)?(?:present|current|(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4}))?";
+        // Split section by likely entry delimiters (bullet points, dates patterns)
+        var lines = experienceSection.Split('\n');
+        ExperienceData? currentExperience = null;
+        var descriptionLines = new List<string>();
         
-        var matches = Regex.Matches(experienceSection, jobEntryPattern, RegexOptions.Multiline);
-        
-        foreach (Match matchItem in matches)
+        for (int i = 0; i < lines.Length; i++)
         {
-            var experience = new ExperienceData();
-            var fullText = matchItem.Groups[0].Value.Trim();
+            var line = lines[i].Trim();
+            if (string.IsNullOrWhiteSpace(line)) continue;
             
-            // Extract job title (usually first part)
-            experience.JobTitle = ExtractJobTitle(fullText);
+            // Check if this line looks like a new job entry (has dates or job title + company pattern)
+            var hasDatePattern = Regex.IsMatch(line, @"\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}[/-]\d{4}");
+            var hasJobPattern = Regex.IsMatch(line, @"(?i)(?:at|@|,|\||–|—)\s*[A-Z]");
             
-            // Extract company (usually after "at" or "@" or second part)
-            experience.CompanyName = ExtractCompanyName(fullText, experience.JobTitle);
+            if (hasDatePattern && hasJobPattern)
+            {
+                // Save previous experience if exists
+                if (currentExperience != null)
+                {
+                    if (descriptionLines.Count > 0)
+                    {
+                        currentExperience.Description = string.Join(" ", descriptionLines).Trim();
+                    }
+                    
+                    // Build formatted description
+                    BuildExperienceDescription(currentExperience);
+                    
+                    if (!string.IsNullOrWhiteSpace(currentExperience.JobTitle) || 
+                        !string.IsNullOrWhiteSpace(currentExperience.CompanyName))
+                    {
+                        experiences.Add(currentExperience);
+                    }
+                }
+                
+                // Start new experience
+                currentExperience = new ExperienceData();
+                descriptionLines.Clear();
+                
+                // Extract job title
+                currentExperience.JobTitle = ExtractJobTitle(line);
+                
+                // Extract company
+                currentExperience.CompanyName = ExtractCompanyName(line, currentExperience.JobTitle);
             
             // Extract dates
-            var datePattern = @"(\d{4}|\w+\s+\d{4}|\d{1,2}[/-]\d{4})";
-            var dateMatches = Regex.Matches(fullText, datePattern);
-            if (dateMatches.Count > 0)
+                ExtractDates(line, currentExperience);
+                
+                // Extract location
+                currentExperience.Location = ExtractLocation(line);
+            }
+            else if (currentExperience != null)
             {
-                experience.StartDate = dateMatches[0].Value;
-                if (dateMatches.Count > 1)
+                // This is likely a description/responsibility line
+                var cleanLine = line.TrimStart('•', '-', '*', '·', '◦', '▪').Trim();
+                if (!string.IsNullOrWhiteSpace(cleanLine) && cleanLine.Length > 10)
                 {
-                    experience.EndDate = dateMatches[1].Value;
-                }
-                else if (fullText.Contains("present", StringComparison.OrdinalIgnoreCase) || 
-                         fullText.Contains("current", StringComparison.OrdinalIgnoreCase))
-                {
-                    experience.IsCurrent = true;
+                    descriptionLines.Add(cleanLine);
                 }
             }
-            
-            // Extract location if present
-            var locationMatch = Regex.Match(fullText, @"(?:in|at|,)\s*([A-Z][A-Za-z\s,]{3,50}?)(?:,|\n|$)");
-            if (locationMatch.Success)
+        }
+        
+        // Don't forget the last experience
+        if (currentExperience != null)
+        {
+            if (descriptionLines.Count > 0)
             {
-                experience.Location = locationMatch.Groups[1].Value.Trim();
+                currentExperience.Description = string.Join(" ", descriptionLines).Trim();
             }
             
-            if (!string.IsNullOrWhiteSpace(experience.JobTitle) || !string.IsNullOrWhiteSpace(experience.CompanyName))
+            // Build formatted description
+            BuildExperienceDescription(currentExperience);
+            
+            if (!string.IsNullOrWhiteSpace(currentExperience.JobTitle) || 
+                !string.IsNullOrWhiteSpace(currentExperience.CompanyName))
             {
-                experiences.Add(experience);
+                experiences.Add(currentExperience);
             }
         }
         
@@ -456,30 +803,152 @@ public class ResumeExtractionService : IResumeExtractionService
         return experiences;
     }
     
-    private string? ExtractJobTitle(string text)
+    private void BuildExperienceDescription(ExperienceData experience)
     {
-        // Common job title patterns
-        var titlePatterns = new[]
+        var descriptionParts = new List<string>();
+        
+        if (!string.IsNullOrWhiteSpace(experience.JobTitle))
+            descriptionParts.Add(experience.JobTitle);
+        
+        if (!string.IsNullOrWhiteSpace(experience.CompanyName))
+            descriptionParts.Add(experience.CompanyName);
+        
+        if (!string.IsNullOrWhiteSpace(experience.Location))
+            descriptionParts.Add(experience.Location);
+        
+        if (!string.IsNullOrWhiteSpace(experience.StartDate))
         {
-            @"(?:^|\s)(Software\s+Engineer|Developer|Programmer|Senior\s+Developer|Lead\s+Developer|Architect|Manager|Analyst|Consultant|Designer|Engineer)[\s,]",
-            @"([A-Z][a-z]+\s+(?:Engineer|Developer|Manager|Analyst|Consultant|Designer|Specialist|Architect))"
+            var dateRange = experience.StartDate;
+            if (experience.IsCurrent)
+                dateRange += " - Present";
+            else if (!string.IsNullOrWhiteSpace(experience.EndDate))
+                dateRange += " - " + experience.EndDate;
+            
+            descriptionParts.Add(dateRange);
+        }
+        
+        // Prepend the formatted description to any existing description
+        var formattedDescription = string.Join(" | ", descriptionParts);
+        
+        if (!string.IsNullOrWhiteSpace(experience.Description))
+        {
+            experience.Description = formattedDescription + "\n" + experience.Description;
+        }
+        else
+        {
+            experience.Description = formattedDescription;
+        }
+    }
+    
+    private void ExtractDates(string text, ExperienceData experience)
+    {
+        // Enhanced date patterns to handle various formats
+        var datePatterns = new[]
+        {
+            @"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}", // Jan 2020, January 2020
+            @"\d{1,2}[/-]\d{4}", // 01/2020, 1/2020
+            @"\d{4}" // 2020
         };
         
-        foreach (var pattern in titlePatterns)
+        var allDates = new List<string>();
+        
+        foreach (var pattern in datePatterns)
         {
-            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+            var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                allDates.Add(match.Value);
+            }
+        }
+        
+        if (allDates.Count > 0)
+        {
+            experience.StartDate = allDates[0];
+            
+            // Check for present/current before assigning end date
+            if (Regex.IsMatch(text, @"(?i)\b(?:present|current|now|ongoing)\b"))
+            {
+                experience.IsCurrent = true;
+            }
+            else if (allDates.Count > 1)
+            {
+                experience.EndDate = allDates[1];
+            }
+        }
+    }
+    
+    private string? ExtractLocation(string text)
+    {
+        // Common location patterns
+        var locationPatterns = new[]
+        {
+            @"(?i)[,|]\s*([A-Z][a-zA-Z\s]+,\s*[A-Z]{2,})\s*(?:[,|•\n]|$)", // City, State/Country
+            @"(?i)[,|]\s*([A-Z][a-zA-Z\s]+)\s*,\s*(?:USA|UK|Pakistan|India|Canada)\s*(?:[,|•\n]|$)", // City, Country name
+            @"(?i)\|\s*([A-Z][a-zA-Z\s]+(?:,\s*[A-Z]{2,})?)\s*\|" // | Location |
+        };
+        
+        foreach (var pattern in locationPatterns)
+        {
+            var match = Regex.Match(text, pattern);
             if (match.Success)
             {
                 return match.Groups[1].Value.Trim();
             }
         }
         
-        // Take first substantial capitalized phrase
-        var words = text.Split(new[] { ' ', '\t', '\n', '-', '–', '—', '@' }, StringSplitOptions.RemoveEmptyEntries);
-        var titleWords = words.Take(3).Where(w => char.IsUpper(w[0])).ToList();
-        if (titleWords.Count >= 2)
+        return null;
+    }
+    
+    private string? ExtractJobTitle(string text)
+    {
+        // Enhanced job title patterns with common seniority levels and roles
+        var titlePatterns = new[]
         {
-            return string.Join(" ", titleWords);
+            // Seniority + Role patterns
+            @"(?i)(?:^|\s)((?:Chief|C-Level|VP|Vice President|AVP|Assistant Vice President|EVP|Executive Vice President|SVP|Senior Vice President|Head of|Director of|Senior|Lead|Principal|Staff|Junior|Associate|Assistant|Graduate|Intern|Trainee|Entry[-\s]Level)\s+(?:Software|Backend|Frontend|Front-end|Back-end|Full[-\s]?Stack|Mobile|Web|Cloud|DevOps|Data|Machine Learning|AI|Quality Assurance|QA|Test|Product|Project|Program|Engineering|Technical|Business|IT|Systems?|Network|Security|Database|Infrastructure)\s+(?:Engineer|Developer|Programmer|Architect|Manager|Analyst|Consultant|Designer|Specialist|Administrator|Coordinator|Lead|Director|Officer))",
+            
+            // Direct role patterns
+            @"(?i)(?:^|\s)((?:Software|Backend|Frontend|Front-end|Back-end|Full[-\s]?Stack|Mobile|Web|Cloud|DevOps|Data|Machine Learning|AI|Quality Assurance|QA|Test)\s+(?:Engineer|Developer|Programmer|Architect|Manager|Analyst|Designer|Lead))",
+            
+            // Management patterns
+            @"(?i)(?:^|\s)((?:Chief|C-Level|Vice President|VP|Director|Head|Manager|Team Lead|Tech Lead|Technical Lead|Project Manager|Product Manager|Program Manager|Engineering Manager|Operations Manager|IT Manager)\s+(?:of\s+)?(?:\w+)?)",
+            
+            // Specific roles
+            @"(?i)(?:^|\s)((?:Software|Solutions?|Systems?|Enterprise|Cloud|Security|Network|Database|IT)\s+Architect)",
+            @"(?i)(?:^|\s)((?:Business|Data|Systems?|Financial|Marketing|Operations?)\s+Analyst)",
+            @"(?i)(?:^|\s)((?:UX|UI|Product|Graphic|Web|Mobile)\s+Designer)",
+            @"(?i)(?:^|\s)((?:DevOps|Site Reliability|Systems?|Network|Database|Cloud|Security)\s+Engineer)",
+            @"(?i)(?:^|\s)(Data\s+(?:Scientist|Engineer|Analyst|Architect))",
+            @"(?i)(?:^|\s)((?:Scrum\s+Master|Agile\s+Coach|Product\s+Owner))",
+            
+            // Consultant/Specialist patterns
+            @"(?i)(?:^|\s)((?:Senior|Lead|Principal)?\s*(?:Technical|IT|Business|Management|SAP|Oracle|Salesforce)\s+Consultant)",
+            @"(?i)(?:^|\s)((?:\w+)\s+Specialist)",
+            
+            // Generic patterns with modifiers
+            @"(?i)^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s+(?:at|@|\||,|–|—)"
+        };
+        
+        foreach (var pattern in titlePatterns)
+        {
+            var match = Regex.Match(text, pattern);
+            if (match.Success && match.Groups.Count > 1)
+            {
+                var title = match.Groups[1].Value.Trim();
+                // Clean up common artifacts
+                title = Regex.Replace(title, @"\s+at$|\s+@$|\s+of$", "", RegexOptions.IgnoreCase).Trim();
+                if (title.Length >= 5 && title.Length <= 100)
+                {
+                    return title;
+                }
+            }
+        }
+        
+        // Fallback: Take first substantial capitalized phrase before "at" or "@"
+        var beforeAtMatch = Regex.Match(text, @"^([A-Z][^@|\n]{5,80}?)\s+(?:at|@)", RegexOptions.IgnoreCase);
+        if (beforeAtMatch.Success)
+        {
+            return beforeAtMatch.Groups[1].Value.Trim();
         }
         
         return null;
@@ -493,23 +962,81 @@ public class ResumeExtractionService : IResumeExtractionService
             textWithoutTitle = text.Replace(jobTitle, "", StringComparison.OrdinalIgnoreCase);
         }
         
-        // Look for company after "at" or "@"
-        var companyPattern = @"(?:at|@)\s+([A-Z][A-Za-z\s&.,]{3,80}?)(?:\s|,|\n|$)";
-        var match = Regex.Match(textWithoutTitle, companyPattern, RegexOptions.IgnoreCase);
-        if (match.Success)
+        // Enhanced company extraction patterns
+        var companyPatterns = new[]
         {
-            return match.Groups[1].Value.Trim();
+            // After "at" or "@"
+            @"(?i)(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,'()-]{2,80}?)(?:\s*[,|\n•]|\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4}|\d{1,2}/))",
+            
+            // Between pipes or separators
+            @"\|\s*([A-Z][A-Za-z0-9\s&.,'()-]{2,60}?)\s*\|",
+            
+            // After comma (common in some formats)
+            @"(?i),\s+([A-Z][A-Za-z0-9\s&.,'()-]{3,60}?)\s*(?:[,|\n•]|\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4}))",
+            
+            // Company with common suffixes
+            @"(?i)(?:at|@)\s+([A-Z][A-Za-z0-9\s&.'()-]+?(?:\s+(?:Inc\.?|LLC|Ltd\.?|Limited|Corp\.?|Corporation|Co\.?|Company|Group|Technologies|Technology|Tech|Solutions?|Services?|Systems?|Consulting|International|Global)))",
+            
+            // Generic after "at"
+            @"(?i)(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,'()-]+)"
+        };
+        
+        foreach (var pattern in companyPatterns)
+        {
+            var match = Regex.Match(textWithoutTitle, pattern);
+            if (match.Success && match.Groups.Count > 1)
+            {
+                var company = match.Groups[1].Value.Trim();
+                
+                // Clean up the company name
+                company = CleanCompanyName(company);
+                
+                if (company.Length >= 2 && company.Length <= 100)
+                {
+                    return company;
+                }
+            }
         }
         
-        // Take next substantial capitalized phrase
-        var parts = textWithoutTitle.Split(new[] { ' ', '\t', '\n', '-', '–', '—' }, StringSplitOptions.RemoveEmptyEntries);
-        var companyWords = parts.Skip(3).Take(3).Where(w => char.IsUpper(w[0])).ToList();
-        if (companyWords.Count >= 1)
+        // Fallback: look for capitalized words after the title
+        var words = textWithoutTitle.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var companyWords = new List<string>();
+        
+        foreach (var word in words)
         {
-            return string.Join(" ", companyWords);
+            if (word.Length > 0 && char.IsUpper(word[0]) && !word.All(char.IsDigit))
+            {
+                companyWords.Add(word);
+                if (companyWords.Count >= 3) break; // Limit to 3 words
+            }
+        }
+        
+        if (companyWords.Count > 0)
+        {
+            var company = string.Join(" ", companyWords);
+            return CleanCompanyName(company);
         }
         
         return null;
+    }
+    
+    private string CleanCompanyName(string company)
+    {
+        // Remove date patterns
+        company = Regex.Replace(company, @"\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}.*$", "", RegexOptions.IgnoreCase);
+        company = Regex.Replace(company, @"\s*\d{1,2}[/-]\d{4}.*$", "");
+        company = Regex.Replace(company, @"\s*\d{4}.*$", "");
+        
+        // Remove trailing punctuation and separators
+        company = Regex.Replace(company, @"[,|\-–—•]+$", "");
+        
+        // Remove "present", "current" etc.
+        company = Regex.Replace(company, @"\s*(?:present|current|now|ongoing).*$", "", RegexOptions.IgnoreCase);
+        
+        // Trim whitespace
+        company = company.Trim();
+        
+        return company;
     }
     
     private List<ExperienceData> ExtractExperiencesSimple(string text)
@@ -521,22 +1048,22 @@ public class ResumeExtractionService : IResumeExtractionService
         {
             if (line.Length < 10) continue;
             
+            // Skip if it looks like a section header
+            if (Regex.IsMatch(line, @"(?i)^\s*(?:experience|work|employment|professional|career)\s*:?\s*$"))
+                continue;
+            
             var experience = new ExperienceData();
             experience.JobTitle = ExtractJobTitle(line);
             experience.CompanyName = ExtractCompanyName(line, experience.JobTitle);
+            experience.Location = ExtractLocation(line);
             
-            var dates = Regex.Matches(line, @"\d{4}");
-            if (dates.Count > 0)
-            {
-                experience.StartDate = dates[0].Value;
-                if (dates.Count > 1)
-                {
-                    experience.EndDate = dates[1].Value;
-                }
-            }
+            // Extract dates using the enhanced method
+            ExtractDates(line, experience);
             
+            // Build description
             if (!string.IsNullOrWhiteSpace(experience.JobTitle) || !string.IsNullOrWhiteSpace(experience.CompanyName))
             {
+                BuildExperienceDescription(experience);
                 experiences.Add(experience);
             }
         }
@@ -584,16 +1111,11 @@ public class ResumeExtractionService : IResumeExtractionService
             var remainingText = projectsSection.Substring(startIndex);
             var nextEntry = Regex.Match(remainingText, @"(?i)(?:^|\n|•)\s*([A-Z][^•\n]{10,100}?)");
             var descriptionEnd = nextEntry.Success ? nextEntry.Index : remainingText.Length;
-            var description = remainingText.Substring(0, Math.Min(descriptionEnd, 500)).Trim();
-            
-            if (description.Length > 20)
-            {
-                project.Description = description;
-            }
+            var descriptionText = remainingText.Substring(0, Math.Min(descriptionEnd, 500)).Trim();
             
             // Extract technologies
             var techPattern = @"(?i)(?:technologies?|tech|tools?|stack)[:•\s]+([^•\n]+)";
-            var techMatch = Regex.Match(description, techPattern);
+            var techMatch = Regex.Match(descriptionText, techPattern);
             if (techMatch.Success)
             {
                 project.Technologies = techMatch.Groups[1].Value.Trim();
@@ -601,16 +1123,70 @@ public class ResumeExtractionService : IResumeExtractionService
             
             // Extract URL
             var urlPattern = @"(https?://[^\s]+|www\.[^\s]+)";
-            var urlMatch = Regex.Match(description, urlPattern);
+            var urlMatch = Regex.Match(descriptionText, urlPattern);
             if (urlMatch.Success)
             {
                 project.Url = urlMatch.Value;
             }
             
+            // Extract dates
+            var datePattern = @"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{1,2}[/-]\d{4}|\d{4}";
+            var dateMatches = Regex.Matches(descriptionText, datePattern, RegexOptions.IgnoreCase);
+            if (dateMatches.Count > 0)
+            {
+                project.StartDate = dateMatches[0].Value;
+                if (dateMatches.Count > 1)
+                {
+                    project.EndDate = dateMatches[1].Value;
+                }
+            }
+            
+            // Store the raw description text (will be formatted below)
+            var rawDescription = descriptionText.Length > 20 ? descriptionText : null;
+            
+            // Build formatted description with header
+            BuildProjectDescription(project, rawDescription);
+            
             projects.Add(project);
         }
         
         return projects;
+    }
+    
+    private void BuildProjectDescription(ProjectData project, string? rawDescription)
+    {
+        var descriptionParts = new List<string>();
+        
+        if (!string.IsNullOrWhiteSpace(project.ProjectName))
+            descriptionParts.Add(project.ProjectName);
+        
+        if (!string.IsNullOrWhiteSpace(project.Technologies))
+            descriptionParts.Add(project.Technologies);
+        
+        if (!string.IsNullOrWhiteSpace(project.StartDate))
+        {
+            var dateRange = project.StartDate;
+            if (!string.IsNullOrWhiteSpace(project.EndDate))
+                dateRange += " - " + project.EndDate;
+            
+            descriptionParts.Add(dateRange);
+        }
+        
+        if (!string.IsNullOrWhiteSpace(project.Url))
+            descriptionParts.Add(project.Url);
+        
+        // Build formatted header
+        var formattedHeader = string.Join(" | ", descriptionParts);
+        
+        // Combine header with raw description
+        if (!string.IsNullOrWhiteSpace(rawDescription))
+        {
+            project.Description = formattedHeader + "\n" + rawDescription;
+        }
+        else
+        {
+            project.Description = formattedHeader;
+        }
     }
     
     private List<LanguageData> ExtractLanguages(string text)

@@ -15,11 +15,21 @@ public interface IResumeExtractionService
 
 public class ResumeExtractionResult
 {
+    public PersonalInfoData? PersonalInfo { get; set; }
     public List<EducationData> Educations { get; set; } = new();
     public List<string> Skills { get; set; } = new();
     public List<ExperienceData> Experiences { get; set; } = new();
     public List<ProjectData> Projects { get; set; } = new();
     public List<LanguageData> Languages { get; set; } = new();
+}
+
+public class PersonalInfoData
+{
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
+    public string? Summary { get; set; }
 }
 
 public class EducationData

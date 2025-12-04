@@ -234,16 +234,6 @@ var enableSwagger = swaggerConfig == null
     : bool.Parse(swaggerConfig);
 if (enableSwagger || app.Environment.IsDevelopment())
 {
-<<<<<<< HEAD
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        // Disable caching in development
-        if (app.Environment.IsDevelopment())
-        {
-            c.ConfigObject.PersistAuthorization = false;
-        }
-=======
     app.UseSwagger(c =>
     {
         c.RouteTemplate = "swagger/{documentName}/swagger.json";
@@ -252,7 +242,6 @@ if (enableSwagger || app.Environment.IsDevelopment())
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "TheJourney API v1");
         c.RoutePrefix = "swagger";
->>>>>>> a8d7b6aaec4817dd2d3adeaa9f9d6b5f7ba87777
     });
 }
 

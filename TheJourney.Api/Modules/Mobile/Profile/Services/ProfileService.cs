@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TheJourney.Api.Infrastructure.Database;
+using TheJourney.Api.Modules.Mobile.Auth.Models;
 using TheJourney.Api.Modules.Mobile.Profile.Models;
 
 namespace TheJourney.Api.Modules.Mobile.Profile.Services;
@@ -22,33 +23,107 @@ public class ProfileService : IProfileService
 
     public async Task<ProfileDataResult> GetProfileAsync(int studentId)
     {
+        // Fetch student info
+        var student = await _context.Set<Student>().FindAsync(studentId);
+        StudentInfoDto? studentInfo = null;
+        if (student != null)
+        {
+            studentInfo = new StudentInfoDto
+            {
+                FullName = student.FullName,
+                Email = student.Email,
+                Phone = student.Phone,
+                Address = student.Address,
+                Summary = student.Summary
+            };
+        }
+
         var educations = await _context.Set<StudentEducation>()
             .Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new StudentEducation
+            {
+                Id = e.Id,
+                StudentId = e.StudentId,
+                Institution = e.Institution,
+                Degree = e.Degree,
+                FieldOfStudy = e.FieldOfStudy,
+                StartDate = e.StartDate,
+                EndDate = e.EndDate,
+                IsCurrent = e.IsCurrent,
+                Description = e.Description,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt
+            })
             .ToListAsync();
 
         var skills = await _context.Set<StudentSkill>()
             .Where(s => s.StudentId == studentId)
             .OrderBy(s => s.SkillName)
+            .Select(s => new StudentSkill
+            {
+                Id = s.Id,
+                StudentId = s.StudentId,
+                SkillName = s.SkillName,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            })
             .ToListAsync();
 
         var experiences = await _context.Set<StudentExperience>()
             .Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new StudentExperience
+            {
+                Id = e.Id,
+                StudentId = e.StudentId,
+                CompanyName = e.CompanyName,
+                JobTitle = e.JobTitle,
+                StartDate = e.StartDate,
+                EndDate = e.EndDate,
+                IsCurrent = e.IsCurrent,
+                Description = e.Description,
+                Location = e.Location,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt
+            })
             .ToListAsync();
 
         var projects = await _context.Set<StudentProject>()
             .Where(p => p.StudentId == studentId)
             .OrderByDescending(p => p.CreatedAt)
+            .Select(p => new StudentProject
+            {
+                Id = p.Id,
+                StudentId = p.StudentId,
+                ProjectName = p.ProjectName,
+                StartDate = p.StartDate,
+                EndDate = p.EndDate,
+                Description = p.Description,
+                Technologies = p.Technologies,
+                Url = p.Url,
+                CreatedAt = p.CreatedAt,
+                UpdatedAt = p.UpdatedAt
+            })
             .ToListAsync();
 
         var languages = await _context.Set<StudentLanguage>()
             .Where(l => l.StudentId == studentId)
             .OrderBy(l => l.LanguageName)
+            .Select(l => new StudentLanguage
+            {
+                Id = l.Id,
+                StudentId = l.StudentId,
+                LanguageName = l.LanguageName,
+                ProficiencyLevel = l.ProficiencyLevel,
+                CreatedAt = l.CreatedAt,
+                UpdatedAt = l.UpdatedAt
+            })
             .ToListAsync();
 
         return new ProfileDataResult
         {
+            StudentInfo = studentInfo,
             Educations = educations,
             Skills = skills,
             Experiences = experiences,
@@ -535,6 +610,40 @@ public class ProfileService : IProfileService
     {
         // Extract data from file (PDF, DOCX, or fallback)
         var extractionResult = await _resumeExtractionService.ExtractFromFileAsync(stream, contentType, fileName);
+
+        // Update student personal info if extracted
+        if (extractionResult.PersonalInfo != null)
+        {
+            var student = await _context.Set<Student>().FindAsync(studentId);
+            if (student != null)
+            {
+                // Update name only if extracted and current is empty or default
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.FullName))
+                {
+                    student.FullName = extractionResult.PersonalInfo.FullName;
+                }
+                
+                // Update phone if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Phone))
+                {
+                    student.Phone = extractionResult.PersonalInfo.Phone;
+                }
+                
+                // Update address if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Address))
+                {
+                    student.Address = extractionResult.PersonalInfo.Address;
+                }
+                
+                // Update summary if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Summary))
+                {
+                    student.Summary = extractionResult.PersonalInfo.Summary;
+                }
+                
+                student.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         // Clear existing data for this student (optional - you might want to keep history)
         // For now, we'll replace existing data
