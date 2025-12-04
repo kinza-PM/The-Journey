@@ -41,26 +41,84 @@ public class ProfileService : IProfileService
         var educations = await _context.Set<StudentEducation>()
             .Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new StudentEducation
+            {
+                Id = e.Id,
+                StudentId = e.StudentId,
+                Institution = e.Institution,
+                Degree = e.Degree,
+                FieldOfStudy = e.FieldOfStudy,
+                StartDate = e.StartDate,
+                EndDate = e.EndDate,
+                IsCurrent = e.IsCurrent,
+                Description = e.Description,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt
+            })
             .ToListAsync();
 
         var skills = await _context.Set<StudentSkill>()
             .Where(s => s.StudentId == studentId)
             .OrderBy(s => s.SkillName)
+            .Select(s => new StudentSkill
+            {
+                Id = s.Id,
+                StudentId = s.StudentId,
+                SkillName = s.SkillName,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            })
             .ToListAsync();
 
         var experiences = await _context.Set<StudentExperience>()
             .Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new StudentExperience
+            {
+                Id = e.Id,
+                StudentId = e.StudentId,
+                CompanyName = e.CompanyName,
+                JobTitle = e.JobTitle,
+                StartDate = e.StartDate,
+                EndDate = e.EndDate,
+                IsCurrent = e.IsCurrent,
+                Description = e.Description,
+                Location = e.Location,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt
+            })
             .ToListAsync();
 
         var projects = await _context.Set<StudentProject>()
             .Where(p => p.StudentId == studentId)
             .OrderByDescending(p => p.CreatedAt)
+            .Select(p => new StudentProject
+            {
+                Id = p.Id,
+                StudentId = p.StudentId,
+                ProjectName = p.ProjectName,
+                StartDate = p.StartDate,
+                EndDate = p.EndDate,
+                Description = p.Description,
+                Technologies = p.Technologies,
+                Url = p.Url,
+                CreatedAt = p.CreatedAt,
+                UpdatedAt = p.UpdatedAt
+            })
             .ToListAsync();
 
         var languages = await _context.Set<StudentLanguage>()
             .Where(l => l.StudentId == studentId)
             .OrderBy(l => l.LanguageName)
+            .Select(l => new StudentLanguage
+            {
+                Id = l.Id,
+                StudentId = l.StudentId,
+                LanguageName = l.LanguageName,
+                ProficiencyLevel = l.ProficiencyLevel,
+                CreatedAt = l.CreatedAt,
+                UpdatedAt = l.UpdatedAt
+            })
             .ToListAsync();
 
         return new ProfileDataResult
