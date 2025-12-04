@@ -24,11 +24,21 @@ public class ProfileExtractionResult
 
 public class ProfileDataResult
 {
+    public StudentInfoDto? StudentInfo { get; set; }
     public List<StudentEducation> Educations { get; set; } = new();
     public List<StudentSkill> Skills { get; set; } = new();
     public List<StudentExperience> Experiences { get; set; } = new();
     public List<StudentProject> Projects { get; set; } = new();
     public List<StudentLanguage> Languages { get; set; } = new();
+}
+
+public class StudentInfoDto
+{
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
+    public string? Summary { get; set; }
 }
 
 public class LinkedInProfileDto

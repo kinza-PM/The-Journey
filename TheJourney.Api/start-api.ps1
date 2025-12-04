@@ -22,12 +22,12 @@ $env:STUDENT_LOCKOUT_MINUTES="15"
 $env:PASSWORD_RESET_EXPIRY_MINUTES="30"
 
 # LinkedIn OAuth config - replace placeholders with your app values
-$env:LINKEDIN_CLIENT_ID="78p2zamtuc89wk"
-$env:LINKEDIN_CLIENT_SECRET="WPL_AP1.EA8bbbDVNUAsfuRD.cdvkwQ=="
+$env:LINKEDIN_CLIENT_ID="77nu6wba61n3sg"
+$env:LINKEDIN_CLIENT_SECRET="WPL_AP1.OjWOPpXcu8gDDca7.dTv6wQ=="
 # Example redirect URI for local development. Make sure this matches the redirect registered in your LinkedIn app.
-$env:LINKEDIN_REDIRECT_URI="http://localhost:5097/api/mobile/auth/linkedin/callback"
+$env:LINKEDIN_REDIRECT_URI="http://4.236.186.123:5000/api/mobile/auth/linkedin/callback"
 # Optional: deep-link return URL the server can redirect to after OAuth (e.g. mobile app deep link)
-$env:LINKEDIN_RETURN_URL="myapp://linkedin-callback"
+$env:LINKEDIN_RETURN_URL="http://4.236.186.123:5000/api/mobile/auth/linkedin/callback"
 
 # Optional: OpenAI API key for AI suggestions (leave empty to disable)
 $env:OPENAI_API_KEY=""

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TheJourney.Api.Infrastructure.Database;
+using TheJourney.Api.Modules.Mobile.Auth.Models;
 using TheJourney.Api.Modules.Mobile.Profile.Models;
 
 namespace TheJourney.Api.Modules.Mobile.Profile.Services;
@@ -22,6 +23,21 @@ public class ProfileService : IProfileService
 
     public async Task<ProfileDataResult> GetProfileAsync(int studentId)
     {
+        // Fetch student info
+        var student = await _context.Set<Student>().FindAsync(studentId);
+        StudentInfoDto? studentInfo = null;
+        if (student != null)
+        {
+            studentInfo = new StudentInfoDto
+            {
+                FullName = student.FullName,
+                Email = student.Email,
+                Phone = student.Phone,
+                Address = student.Address,
+                Summary = student.Summary
+            };
+        }
+
         var educations = await _context.Set<StudentEducation>()
             .Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.CreatedAt)
@@ -49,6 +65,7 @@ public class ProfileService : IProfileService
 
         return new ProfileDataResult
         {
+            StudentInfo = studentInfo,
             Educations = educations,
             Skills = skills,
             Experiences = experiences,
@@ -535,6 +552,40 @@ public class ProfileService : IProfileService
     {
         // Extract data from file (PDF, DOCX, or fallback)
         var extractionResult = await _resumeExtractionService.ExtractFromFileAsync(stream, contentType, fileName);
+
+        // Update student personal info if extracted
+        if (extractionResult.PersonalInfo != null)
+        {
+            var student = await _context.Set<Student>().FindAsync(studentId);
+            if (student != null)
+            {
+                // Update name only if extracted and current is empty or default
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.FullName))
+                {
+                    student.FullName = extractionResult.PersonalInfo.FullName;
+                }
+                
+                // Update phone if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Phone))
+                {
+                    student.Phone = extractionResult.PersonalInfo.Phone;
+                }
+                
+                // Update address if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Address))
+                {
+                    student.Address = extractionResult.PersonalInfo.Address;
+                }
+                
+                // Update summary if extracted
+                if (!string.IsNullOrWhiteSpace(extractionResult.PersonalInfo.Summary))
+                {
+                    student.Summary = extractionResult.PersonalInfo.Summary;
+                }
+                
+                student.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         // Clear existing data for this student (optional - you might want to keep history)
         // For now, we'll replace existing data

@@ -31,6 +31,7 @@ public class ResumeController : StudentAuthorizedController
             var profile = await _profileService.GetProfileAsync(studentId.Value);
             return Ok(new
             {
+                studentInfo = profile.StudentInfo,
                 educations = profile.Educations,
                 skills = profile.Skills,
                 experiences = profile.Experiences,
